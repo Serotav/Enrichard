@@ -1,0 +1,17 @@
+services:
+  enrichard-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    
+    container_name: enrichard_container
+
+    ports:
+      - "8501:8501"
+
+    volumes:
+      - ./app:/app
+      - ./data:/app/data
+    
+    #command: ["python3", "-c", "from time import sleep; sleep(80)"]
+    command: ["/start.sh"]
