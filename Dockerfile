@@ -6,19 +6,30 @@ ENV PYTHONUNBUFFERED=1
 # --- Dependencies ---
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
+    # Python dependencies
     python3 \
     python3-pip \
+    python3-dev \
+    # R dependencies
     r-base \
     r-base-dev \
-    python3-dev \
     gfortran \
+    # General build tools
     build-essential \
     cargo \
+    wget \
+    pkg-config \
+    # C-library dependencies for Python/R packages
     libssl-dev \
     libcurl4-openssl-dev \
     libxml2-dev \
     libtirpc-dev \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+    # C-library dependencies for R graphics
+    libfontconfig1-dev \
+    libfreetype6-dev \
+    libharfbuzz-dev \
+    libfribidi-dev 
+
 
 # ---  Packages ---
 COPY python_requirements.txt .
