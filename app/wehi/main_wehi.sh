@@ -39,7 +39,6 @@ fi
 
 # --- Create Background Annotation File ---
 if [ ! -f "$BACKGROUND_FILE" ]; then
-    echo "Creating background annotation file ($BACKGROUND_FILE)..."
     python3 "$ANNOTATE_SCRIPT_PY"
     if [ $? -ne 0 ]; then
         echo "Error running Python script ($ANNOTATE_SCRIPT_PY). Exiting."
