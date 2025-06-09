@@ -28,7 +28,10 @@ RUN apt-get update && \
     libfontconfig1-dev \
     libfreetype6-dev \
     libharfbuzz-dev \
-    libfribidi-dev 
+    libfribidi-dev     \
+    libpng-dev \
+    libtiff5-dev \
+    libjpeg-dev 
 
 
 # ---  Packages ---
