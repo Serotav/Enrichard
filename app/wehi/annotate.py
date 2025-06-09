@@ -10,7 +10,7 @@ df = pd.read_csv("MSA_annotation/MSA.hg38.manifest.gencode.v41.tsv",sep ='\t')
 if 'info' in argv: print(f'{df.shape=}',file=stderr)
 df = df[df["genesUniq"].notna()]
 
-intermediate = open('symbols_to_entrezid.txt').read().strip().split('\n')
+intermediate = open('background/symbols_to_entrezid.txt').read().strip().split('\n')
 mapping = {symbol: entreid for line in intermediate for (symbol, entreid) in [line.split(" ")]}
 
 enterzid = []
