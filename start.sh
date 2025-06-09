@@ -1,5 +1,4 @@
 #!/bin/bash
+    
 
-
-
-python3 -m http.server 8501
+exec streamlit run /app/app.py
