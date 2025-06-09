@@ -11,6 +11,5 @@ services:
 
     volumes:
       - ./app:/app
-      - ./data:/app/data
     
     command: ["/start.sh"]
