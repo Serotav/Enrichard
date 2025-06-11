@@ -11,7 +11,7 @@ PARSED_DIR="$BASE_DIR/Parsed"
 # Create directories if they don't exist
 mkdir -p "$RDATA_DIR" "$BACKGROUND_DIR" "$SAMPLE_DIR" "$PARSED_DIR"
 
-ANNOTATE_SCRIPT_R="$BASE_DIR/annotate_r_step.r"
+ANNOTATE_SCRIPT_R="$BASE_DIR/look_up_table_create.r"
 ANNOTATE_SCRIPT_PY="$BASE_DIR/annotate.py"
 ENRICH_SCRIPT="$BASE_DIR/do_enrich.py"
 
