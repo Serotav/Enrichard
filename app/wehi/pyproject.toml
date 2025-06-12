@@ -1,0 +1,10 @@
+[project]
+name = "wehi"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pandas>=2.3.0",
+    "rds2py>=0.7.3",
+]
