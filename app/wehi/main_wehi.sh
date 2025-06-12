@@ -24,8 +24,8 @@ MAPPING_FILE="$BACKGROUND_DIR/symbols_to_entrezid.txt"
 # --- Download MSigDB Data ---
 if [ ! -f "$RDATA_DIR/human_H_v5p2.rdata" ]; then
     echo "Downloading MSigDB .rdata files..."
-    wget https://bioinf.wehi.edu.au/software/MSigDB/human_H_v5p2.rdata -P "$RDATA_DIR"
-    wget https://bioinf.wehi.edu.au/software/MSigDB/human_c{1..7}_v5p2.rdata -P "$RDATA_DIR"
+    wget https://bioinf.wehi.edu.au/MSigDB/v7.1/Hs.h.all.v7.1.entrez.rds -P "$RDATA_DIR"
+    wget https://bioinf.wehi.edu.au/MSigDB/v7.1/Hs.c{1..7}.all.v7.1.entrez.rds -P "$RDATA_DIR"
 fi
 
 # --- Create Gene ID Mapping ---
