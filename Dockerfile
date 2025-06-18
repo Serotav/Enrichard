@@ -42,8 +42,11 @@ RUN Rscript install_r_packages.r
 
 
 WORKDIR /app
-COPY ./app .
-COPY ./start.sh /start.sh
+COPY ./app/app.py .
+COPY ./app/wehi/*.* .
+
+COPY ./start.sh /.
+COPY ./setup.sh /.
 
 RUN chmod +x /start.sh
 

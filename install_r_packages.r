@@ -4,5 +4,5 @@ if (!requireNamespace("BiocManager", quietly = TRUE)) {
 
 install.packages("tidyverse")
 
-bioc_packages <- c("AnnotationDbi", "org.Hs.eg.db")
+bioc_packages <- c("GenomicRanges", "TxDb.Hsapiens.UCSC.hg38.knownGene")
 BiocManager::install(bioc_packages)

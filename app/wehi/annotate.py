@@ -4,42 +4,32 @@ import pathlib
 from collections import defaultdict
 from sys import argv, stderr
 from rds2py import read_rds
-
+import argparse
 """
-TL;DR: we take genesUniq and map them to traits.
-- Loads a Gencode manifest TSV, filters rows with non-null gene symbols.
-- Builds a gene-symbol → Entrez ID mapping from a lookup file.
-- Maps each rows semicolon-separated gene symbols to Entrez IDs.
 - Iterates through each RDS file in `rdata/`, reading via rds2py.
   - Each RDS is a dict: trait → [Entrez IDs].
   - Converts it to Entrez ID → traits mapping, then annotates the DataFrame.
-- Converts fully numeric columns to integers.
-- Outputs the final annotated table to `background/MSA_parsed.csv`.
 """
+ENTEREZID_COL = "EntrezID"
 
-if __name__ == "__main__":
+def annotate(input_file:str, output_file:str, rdata_dir:str):
     # Loading the df we want to annotate
-    background_df = pd.read_csv("MSA_annotation/MSA.hg38.manifest.gencode.v41.tsv",sep ='\t')
-    background_df = background_df[background_df["genesUniq"].notna()]
-    if 'info' in argv: print(f'{background_df.shape=}',file=stderr)
+    if input_file.split('.')[-1] == 'csv':
+        background_df = pd.read_csv(input_file)
+    elif input_file.split('.')[-1] == 'tsv':
+        background_df = pd.read_csv(input_file, sep='\t')
+    else:
+        print(f"Unsupported file format: {input_file}", file=stderr)
+        return
 
-    # Create the mapping dict, here the mapping is symbol/ENSEMBL ->  entrezid
-    mapping_file = open('background/symbols_to_entrezid.txt').read().strip().split('\n')
-    mapping = {symbol: entreid for line in mapping_file for (symbol, entreid) in [line.split(" ")]}
+    # Cast EntrezID column to numeric this should not be necessary, but R is not trustworthy
+    background_df[ENTEREZID_COL] = pd.to_numeric(background_df[ENTEREZID_COL], errors='coerce')
+    
+    print(f'Parsing {input_file} {background_df.columns}',file=stderr)
 
-    # Each cpg site might have might have multiple "genesUniq" entries, so we need to map each of them to entrezid
-    # Some might no have a mapping, TODO: drop those
-    enterzid = []
-    for gene in background_df["genesUniq"]:
-        enterzid.append(';'.join([mapping[symbol] for symbol in gene.split(';') if symbol in mapping]))
-
-    # Once mapped, we can add the entrezid to the df. The mapping is complete
-    background_df["ENTREZID"] = enterzid
-    if 'info' in argv: print(f'After enterzid {background_df.shape=}',file=stderr)
-
-    # Now we can load the data from bioinf.wehi.edu.au
+    # We can load the data from bioinf.wehi.edu.au
     # And parse the data, for each file (trait) we will create a new column in the df
-    for file_name in sorted(str(f) for f in pathlib.Path("rdata").rglob("*") if f.is_file()):
+    for file_name in sorted(str(f) for f in pathlib.Path(rdata_dir).rglob("*") if f.is_file()):
         # Eeach file maps trait -> entrezid, but we need to map entrezid -> trait(s)
         # So we will create a dict where the key is the entrezid and the value is a list of traits
         print(f'Processing {file_name}', file=stderr)
@@ -48,16 +38,14 @@ if __name__ == "__main__":
         
         for trait in content.keys():
             for eid in content[trait]:
-                eid_to_traits[eid].append(trait)
+                eid_to_traits[int(eid)].append(trait)
         
-        # Now we can create a new column in the background_df for each file
-        # The column will contain the traits for the entrezid in that row
-        new_col = [np.nan] * background_df.shape[0]
-        for i,eid in enumerate(background_df["ENTREZID"]):
-            if eid in eid_to_traits:
-                new_col[i] =';'.join(eid_to_traits[eid])
-        
-        background_df[file_name.split('/')[-1]] = new_col
+        def join_traits(trait_list):
+            return ';'.join(trait_list) if trait_list else np.nan
+
+        # Map the EntrezIDs to their traits using the dictionary
+        col_name = file_name.split('/')[-1]
+        background_df[col_name] = background_df[ENTEREZID_COL].map(eid_to_traits).apply(join_traits)
 
         if 'info' in argv: print(f'{file_name.split('/')[-1]} {background_df[file_name.split('/')[-1]].count()}',file=stderr)
 
@@ -66,5 +54,35 @@ if __name__ == "__main__":
         if pd.api.types.is_numeric_dtype(background_df[col]) and not background_df[col].isna().any():
             background_df[col] = background_df[col].astype(int)  
 
-    if 'info' in argv: print(f'Final shape {background_df.shape}', file=stderr)
-    background_df.to_csv("background/MSA_parsed.csv",index=False, sep='\t')
+    print(f'Final shape {background_df.shape} location {output_file}',file=stderr)
+    background_df.to_csv(output_file,index=False, sep='\t')
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Annotate a file with trait data from RDS files.",
+        formatter_class=argparse.RawTextHelpFormatter
+    )
+    
+    parser.add_argument(
+        'input_file',
+        help='Input file to annotate (CSV or TSV format)'
+    )
+    
+    parser.add_argument(
+        'output_file', 
+        help='Output file name'
+    )
+
+    parser.add_argument(
+        'rdata_dir', 
+        help='Output file name'
+    )
+
+    args = parser.parse_args()
+
+    annotate(args.input_file, args.output_file, args.rdata_dir)
+
+
+if __name__ == "__main__":
+    main()
