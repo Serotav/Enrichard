@@ -46,7 +46,11 @@ wget -q $TRAIT_TO_DOWNLOAD -P "$RDATA_DIR"
 
 # Parse Background Files
 for filepath in "${source_files[@]}"; do
-        annotate_background "$filepath" #&
+    if [ "$RUN_MODE" = "server" ]; then
+        annotate_background "$filepath" &
+    else
+        annotate_background "$filepath"
+    fi
 done
 
 wait

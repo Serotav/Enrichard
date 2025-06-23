@@ -38,6 +38,7 @@ for module_dir in $MODULES_DIR/*/; do
             bash "$module_dir/setup.sh" &
         else
             bash "$module_dir/setup.sh"
+        fi
     fi
 done
 

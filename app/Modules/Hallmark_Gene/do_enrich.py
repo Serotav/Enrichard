@@ -75,7 +75,6 @@ def perform_enrichment(background_bitset_df: pl.DataFrame, sample_probes_df: pl.
         sys.exit(1)
 
     # Pre-calculate which probes in the background are part of the user's sample.
-    # FIX 1: Use `.unique()` within `.is_in` to resolve the deprecation warning.
     background_df = background_bitset_df.with_columns(
         is_in_sample=pl.col(PROBE_ID_COL).is_in(sample_probes_df[PROBE_ID_COL].unique())
     )
