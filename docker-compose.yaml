@@ -11,6 +11,7 @@ services:
     - USER_CUSTOM_BACKGROUND_NAME=user_background.txt
     - USER_SAMPLE_NAME=user_sample.txt
     - USER_MODULE_OUTPUT=Module_output
+    - RUN_MODE=local #server
     user: "1000:1000"
     ports:
       - "8501:8501"

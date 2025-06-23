@@ -34,7 +34,10 @@ done
 for module_dir in $MODULES_DIR/*/; do
     echo "Running setup for $(basename "$module_dir")"
     if [ -f "$module_dir/setup.sh" ]; then
-        bash "$module_dir/setup.sh" # &
+        if [ "$RUN_MODE" = "server" ]; then
+            bash "$module_dir/setup.sh" &
+        else
+            bash "$module_dir/setup.sh"
     fi
 done
 
