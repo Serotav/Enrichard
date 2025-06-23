@@ -41,13 +41,14 @@ COPY install_r_packages.r .
 RUN Rscript install_r_packages.r
 
 
+# Security in a world where no one cares tho
+COPY --chown=1000:1000 app /app
+
 WORKDIR /app
-COPY ./app/app.py .
-COPY ./app/wehi/*.* .
+USER 1000
 
-COPY ./start.sh /.
-COPY ./setup.sh /.
-
-RUN chmod +x /start.sh
+RUN chmod +x start.sh
 
 EXPOSE 8501
+
+

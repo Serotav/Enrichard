@@ -1,3 +1,4 @@
+polars
 pandas
 numpy
 scipy

@@ -5,11 +5,17 @@ services:
       dockerfile: Dockerfile
     
     container_name: enrichard_container
-
+    
+    environment:
+    - COMMON_BACKGROUND=/app/Common_Background
+    - USER_CUSTOM_BACKGROUND_NAME=user_background.txt
+    - USER_SAMPLE_NAME=user_sample.txt
+    - USER_MODULE_OUTPUT=Module_output
+    user: "1000:1000"
     ports:
       - "8501:8501"
 
     volumes:
       - ./app:/app
     
-    command: ["/start.sh"]
+    command: ["/app/start.sh"]
