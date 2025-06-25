@@ -190,7 +190,6 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
     destination = output_dir/ OUTPUT_FILE_NAME
     
-    results_df = results_df.sort("P-Value")
     results_df.write_csv(destination, separator="\t")
     print(f"Significant results saved to: {destination}")
 

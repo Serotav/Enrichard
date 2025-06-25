@@ -4,3 +4,4 @@ numpy
 scipy
 rds2py
 streamlit
+altair

@@ -5,6 +5,8 @@ import os
 import pathlib
 import uuid 
 import shutil 
+import altair as alt
+import polars as pl
 
 APP_DIR = pathlib.Path(__file__).parent
 USER_DATA_ROOT = APP_DIR / "User_Data"
@@ -46,12 +48,43 @@ def get_background_options() -> list[str]:
 
     return sorted(options)
 
+def create_dot_plot(df: pd.DataFrame):
+    """
+    Creates an Altair dot plot for enrichment analysis results.
+    """
+    # Only show the top N results to keep the chart readable
+    # We can do .head() becouse they are already sorted by P-Value in the DataFrame
+    df_to_plot = df.head(20).copy()
+
+    # We need to sort the traits for the y-axis based on P-Value for a clean look
+    sort_order = df_to_plot.sort_values("P-Value")["Trait"].tolist()
+
+    chart = alt.Chart(df_to_plot).mark_circle().encode(
+        y=alt.Y('Trait:N', sort=sort_order, title="Enriched Trait"),
+        x=alt.X('Odds-Ratio:Q', title="Odds Ratio"),
+        color=alt.Color('P-Value:Q', 
+                        scale=alt.Scale(scheme='lightgreyred', reverse=True), 
+                        title="P-Value"),
+        
+        size=alt.Size('a:Q', title="Count in Sample"),
+
+        tooltip=[
+            alt.Tooltip('Trait:N'),
+            alt.Tooltip('P-Value:Q', format=".2e"), 
+            alt.Tooltip('Odds-Ratio:Q', format=".2f"),
+            alt.Tooltip('a:Q', title="Sample Hits")
+        ]
+    ).properties(
+        title="Top Enriched Pathways/Traits"
+    ).interactive()
+
+    return chart
+
 def save_uploaded_file(uploaded_file, destination_path: pathlib.Path) -> None:
     """Saves an uploaded file to a specified destination."""
     try:
         with open(destination_path, "wb") as f:
             f.write(uploaded_file.getvalue())
-        st.success(f"File '{uploaded_file.name}' saved to '{destination_path.name}'.")
     except Exception as e:
         st.error(f"Failed to save file '{uploaded_file.name}': {e}")
         st.stop()
@@ -65,14 +98,13 @@ def run_enrichment_pipeline(user_dir: pathlib.Path, background: str, p_value: fl
     st.info("Starting analysis pipeline...")
     st.markdown("---")
 
-    with st.spinner("Running enrichment analysis... This may take several minutes."):
+    with st.spinner("Running enrichment analysis. We'll be right back with results!"):
         process = subprocess.run(
             command,
             capture_output=True,
             text=True,
         )
 
-    # Display the execution log in an expander for cleanliness
     with st.expander("Show Pipeline Execution Log"):
         st.code(
             f"Command: {' '.join(command)}\n"
@@ -88,51 +120,98 @@ def run_enrichment_pipeline(user_dir: pathlib.Path, background: str, p_value: fl
     else:
         st.success("Pipeline completed successfully!")
 
+def render_methodology_explanation():
+    """Renders the explanation of the Fisher's Exact Test methodology."""
+    st.markdown("""
+    For each trait, a **Fisher's Exact Test** was performed to determine if the trait is significantly enriched in your sample compared to the background universe. This test uses a 2x2 contingency table:
+    """)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("""
+        | | Has Trait | No Trait |
+        |---|---|---|
+        | **In Sample** | **a** | **b** |
+        | **Not in Sample** | **c** | **d** |
+        """)
+    with col2:
+        st.markdown("""
+        - **a**: Probes in your sample that have the trait.
+        - **b**: Probes in your sample that **do not** have the trait.
+        - **c**: Probes in the background (but not your sample) that have the trait.
+        - **d**: Probes in the background (but not your sample) that **do not** have the trait.
+        """)
+    
+    st.markdown("The **P-Value** represents the probability of observing such an enrichment (or a greater one) by random chance. A lower P-Value indicates a more statistically significant enrichment.")
+    st.markdown("The **Odds-Ratio** measures the strength of the association. It is calculated as:")
+    st.latex(r'\text{Odds-Ratio} = \frac{a \times d}{b \times c}')
+    st.markdown("An Odds-Ratio greater than 1 suggests that the trait is more likely to be found in your sample group than in the background.")
+
+def display_single_module_results(module_name: str, file_path: pathlib.Path) -> bool:
+    """
+    Handles the logic for displaying the results (chart and data) for one module.
+    Returns True if results were found and displayed, False otherwise.
+    """
+    st.markdown(f"#### Module: `{module_name}`")
+    try:
+        df = pl.read_csv(file_path, separator='\t').to_pandas()
+        
+        if df.empty:
+            st.info("This module produced no significant results.")
+            return False
+
+        st.success(f"Found {len(df)} significant traits.")
+        
+        st.subheader("Visualization")
+        dot_plot = create_dot_plot(df)
+        st.altair_chart(dot_plot, use_container_width=True)
+        
+        with st.expander("Show Full Data Table"):
+            st.dataframe(df)
+        
+        return True
+
+    except pl.exceptions.NoDataError:
+        st.info("This module produced no significant results (empty file).")
+        return False
+    except Exception as e:
+        st.error(f"Error reading or processing result file '{file_path.name}': {e}")
+        return False
 
 def display_results():
     """
-    Scans the user's directory for result files and displays them in tabs.
-    Assumes a structure like: USER_DIR/MODULE_NAME/result.tsv
+    Scans for result files, creates tabs, and displays results and methodology.
     """
-    results_found = False
-    
-    # Glob for any .tsv files inside subdirectories of the user's folder
     module_output = st.session_state.user_dir / USER_MODULE_OUTPUT
-    result_files = list(module_output.glob('*/*.tsv'))
+    result_files = sorted(list(module_output.glob('*/*.tsv')))
     
     if not result_files:
         st.warning("Analysis complete, but no result files were found.")
         return
 
     st.header("Enrichment Results")
+
+    with st.expander("How to Interpret These Results (Methodology)", expanded=False):
+        render_methodology_explanation()
     
-    # Create a list of tab names from the parent directory of each result file
+    st.markdown("---") 
+
     module_names = [path.parent.name for path in result_files]
-    print(f"Found result files: {result_files}\n{module_names=}")
     tabs = st.tabs(module_names)
 
+    results_found_in_any_module = False
     for i, file_path in enumerate(result_files):
         with tabs[i]:
-            st.markdown(f"#### Module: `{module_names[i]}`")
-            try:
-                print(f"Reading result file: {file_path}")
-                df = pd.read_csv(file_path, sep='\t')
-                if not df.empty:
-                    st.dataframe(df)
-                    results_found = True
-                else:
-                    st.info("This module produced no significant results.")
-            except pd.errors.EmptyDataError:
-                st.info("This module produced no significant results (empty file).")
-            except Exception as e:
-                st.error(f"Error reading result file '{file_path.name}': {e}")
+            if display_single_module_results(module_names[i], file_path):
+                results_found_in_any_module = True
 
-    if not results_found and result_files:
+    if not results_found_in_any_module:
         st.info("The pipeline ran, but no modules found significant enrichment.")
 
 
 def main():
     st.set_page_config(layout="wide")
+
     st.markdown("<h1 style='text-align: center;'>🚀 E N R I C H A R D 🚀</h1>", unsafe_allow_html=True)
     st.subheader("CpG Site Enrichment Analysis")
     initialize_session()
@@ -152,8 +231,6 @@ def main():
         col1, col2 = st.columns(2)
 
         custom_background_file = None  # Initialize to None
-
-
 
         # --- Left Column: Background Selection ---
         with col1:
@@ -192,7 +269,6 @@ def main():
             # Clean up the directory from any previous run.
             user_dir = st.session_state.user_dir
             if user_dir.exists():
-                st.warning("Cleaning up workspace from previous run...")
                 shutil.rmtree(user_dir)
             user_dir.mkdir(exist_ok=True)
             
