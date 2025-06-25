@@ -7,8 +7,10 @@ import uuid
 import shutil 
 import altair as alt
 import polars as pl
+from statsmodels.stats.multitest import multitest_methods_names
 
 APP_DIR = pathlib.Path(__file__).parent
+TEST_SAMPLES_DIR = APP_DIR / "Test_samples"
 USER_DATA_ROOT = APP_DIR / "User_Data"
 COMMON_BACKGROUND_ROOT = pathlib.Path(os.getenv("COMMON_BACKGROUND"))
 MASTER_SCRIPT_PATH = APP_DIR / "master_enrich.sh"
@@ -48,6 +50,20 @@ def get_background_options() -> list[str]:
 
     return sorted(options)
 
+def get_example_files() -> dict:
+    """
+    Scans the TEST_SAMPLES_DIR for available example files.
+    Returns a dictionary mapping a display name to its file path.
+    """
+    if not TEST_SAMPLES_DIR.is_dir():
+        return {} 
+    
+    example_files = {
+        file_path.stem: file_path 
+        for file_path in TEST_SAMPLES_DIR.glob('*')
+    }
+    return example_files
+
 def create_dot_plot(df: pd.DataFrame):
     """
     Creates an Altair dot plot for enrichment analysis results.
@@ -57,20 +73,20 @@ def create_dot_plot(df: pd.DataFrame):
     df_to_plot = df.head(20).copy()
 
     # We need to sort the traits for the y-axis based on P-Value for a clean look
-    sort_order = df_to_plot.sort_values("P-Value")["Trait"].tolist()
+    sort_order = df_to_plot.sort_values("P-adj")["Trait"].tolist()
 
     chart = alt.Chart(df_to_plot).mark_circle().encode(
         y=alt.Y('Trait:N', sort=sort_order, title="Enriched Trait"),
         x=alt.X('Odds-Ratio:Q', title="Odds Ratio"),
-        color=alt.Color('P-Value:Q', 
+        color=alt.Color('P-adj:Q', 
                         scale=alt.Scale(scheme='lightgreyred', reverse=True), 
-                        title="P-Value"),
+                        title="P-adj"),
         
         size=alt.Size('a:Q', title="Count in Sample"),
 
         tooltip=[
             alt.Tooltip('Trait:N'),
-            alt.Tooltip('P-Value:Q', format=".2e"), 
+            alt.Tooltip('P-adj:Q', format=".2e"), 
             alt.Tooltip('Odds-Ratio:Q', format=".2f"),
             alt.Tooltip('a:Q', title="Sample Hits")
         ]
@@ -89,11 +105,19 @@ def save_uploaded_file(uploaded_file, destination_path: pathlib.Path) -> None:
         st.error(f"Failed to save file '{uploaded_file.name}': {e}")
         st.stop()
 
-def run_enrichment_pipeline(user_dir: pathlib.Path, background: str, p_value: float) -> None:
+def copy_example_file(source_path: pathlib.Path, destination_path: pathlib.Path) -> None:
+    """Copies an example file to the user's session directory."""
+    try:
+        shutil.copy(source_path, destination_path)
+    except Exception as e:
+        st.error(f"Failed to copy example file '{source_path.name}': {e}")
+        st.stop()
+
+def run_enrichment_pipeline(user_dir: pathlib.Path, background: str, p_value: float, correction_method: str) -> None:
     """
     Executes the master enrichment shell script and displays its output.
     """
-    command = ['bash', str(MASTER_SCRIPT_PATH), str(user_dir), str(background), str(p_value)]
+    command = ['bash', str(MASTER_SCRIPT_PATH), str(user_dir), str(background), str(p_value), str(correction_method)]
     
     st.info("Starting analysis pipeline...")
     st.markdown("---")
@@ -216,23 +240,51 @@ def main():
     st.subheader("CpG Site Enrichment Analysis")
     initialize_session()
 
-    st.markdown("Upload a file containing CpG probe IDs (one ID per line, no header) to perform enrichment analysis.")
-
-    # --- Step 1: File Upload (Stays at the top) ---
-    uploaded_sample_file = st.file_uploader(
-        "Upload your list of CpG sites", type=['csv', 'txt']
+    st.markdown("Upload a file containing CpG probe IDs (one ID per line) to perform enrichment analysis.")
+    
+    input_method = st.radio(
+        "Choose your input method:",
+        ("Upload a File", "Use an Example"),
+        horizontal=True,
+        label_visibility="collapsed"
     )
 
-    if uploaded_sample_file:
-        # --- Step 2: Configure Analysis Parameters (New Layout) ---
+    sample_source = None
+    uploaded_or_example = None
+
+    if input_method == "Upload a File":
+        uploaded_sample_file = st.file_uploader(
+            "Upload your list of CpG sites (one ID per line, no header)", type=['csv', 'txt']
+        )
+        if uploaded_sample_file:
+            sample_source = uploaded_sample_file
+            uploaded_or_example = 'uploaded'
+
+    elif input_method == "Use an Example":
+        example_files = get_example_files()
+        if not example_files:
+            st.info("No example files found.")
+        else:
+            options = ["- Select an example -"] + list(example_files.keys())
+            selected_example_name = st.selectbox(
+                "Choose an example file to run:",
+                options=options
+            )
+            if selected_example_name != "- Select an example -":
+                sample_source = example_files[selected_example_name]
+                uploaded_or_example = 'example'
+    
+
+    if sample_source:
+        # Configure Analysis Parameters 
         st.header("Configure Analysis Parameters")
 
         # Create two columns for the configuration options
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
 
         custom_background_file = None  # Initialize to None
 
-        # --- Left Column: Background Selection ---
+        #  Left Column: Background Selection 
         with col1:
             st.subheader("Background Universe")
             available_choices = get_background_options() + ['custom']
@@ -247,19 +299,31 @@ def main():
                     "Upload your custom background file", type=['csv', 'txt'], key='custom_bg'
                 )
         
-        # --- Right Column: Statistical Options ---
+        # Center Column: p val
         with col2:
             st.subheader("Statistical Options")
             p_value_threshold = st.number_input(
                 label="P-value threshold",
-                min_value=0.0,
-                max_value=1.0,
-                value=0.05,  
-                step=0.01,
-                format="%.2f", 
-                help="The significance threshold for the Fisher's Exact Test."
+                min_value=0.0, max_value=1.0, value=0.05, step=0.01,
+                format="%.2f", help="The significance threshold for the Fisher's Exact Test."
             )
+        
+        # Right Column: Correction Method
+        with col3:
+            st.subheader("Correction Method")
+            # Get the list of methods and add 'none'
+            correction_options = sorted(list(multitest_methods_names.values()) + ['none'])
+            
+            # Set a sensible default index ('fdr_bh' is highly recommended)
+            default_index = correction_options.index('Bonferroni') 
 
+            selected_correction_method = st.selectbox(
+                label="Multiple Testing Correction",
+                options=correction_options,
+                index=default_index,
+                help="Method to adjust p-values for multiple comparisons."
+            )
+        
         # Determine if the 'Run' button should be disabled
         is_run_disabled = (selected_background_name == 'custom' and custom_background_file is None)
 
@@ -272,10 +336,18 @@ def main():
                 shutil.rmtree(user_dir)
             user_dir.mkdir(exist_ok=True)
             
-            # Save the new files for THIS run into the clean directory.
+            # Handel both uploaded and example files
             user_sample_path = user_dir / USER_SAMPLE_NAME
-            save_uploaded_file(uploaded_sample_file, user_sample_path)
-            
+            if uploaded_or_example == 'uploaded': 
+                st.info(f"Using uploaded file: {sample_source.name}")
+                save_uploaded_file(sample_source, user_sample_path)
+            elif uploaded_or_example == 'example':
+                st.info(f"Using example file: {sample_source.name}")
+                copy_example_file(sample_source, user_sample_path)
+            else:
+                st.error("No valid sample file provided. Please upload or select an example file.")
+                st.stop()
+
             background = selected_background_name 
             if selected_background_name == 'custom':
                 background = USER_CUSTOM_BACKGROUND_NAME 
@@ -283,7 +355,7 @@ def main():
                 save_uploaded_file(custom_background_file, user_background_path)
 
             # Run the enrichment analysis pipeline
-            run_enrichment_pipeline(user_dir, background, p_value_threshold)
+            run_enrichment_pipeline(user_dir, background, p_value_threshold, selected_correction_method)
             display_results()
             
     else:

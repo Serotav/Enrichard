@@ -6,6 +6,8 @@ import argparse
 import os
 import pathlib
 from pathlib import Path
+from statsmodels.stats.multitest import multipletests
+
 APP_DIR = pathlib.Path(__file__).parent
 BACKGROUND_DIR  = APP_DIR/"background"
 MERGE_PATH = BACKGROUND_DIR / "merge.tsv" 
@@ -63,7 +65,7 @@ def custom_background(user_background_file: Path) -> pl.DataFrame:
     return custom_annotated_df
 
 
-def perform_enrichment(background_bitset_df: pl.DataFrame, sample_probes_df: pl.DataFrame, p_value_threshold: float) -> pl.DataFrame:
+def perform_enrichment(background_bitset_df: pl.DataFrame, sample_probes_df: pl.DataFrame) -> pl.DataFrame:
     """
     Performs Fisher's exact test using a Polars backend for fast counting.
     """
@@ -121,19 +123,71 @@ def perform_enrichment(background_bitset_df: pl.DataFrame, sample_probes_df: pl.
         odds_ratio, p_value = fisher_exact([[a, b], [c, d]], alternative='greater')
         
         # Store significant results 
-        if p_value < p_value_threshold:
-            results_list.append({
-                "Trait": trait_name,
-                "P-Value": p_value,
-                "Odds-Ratio": odds_ratio,
-                "a": a, "b": b, "c": c, "d": d,
-            })
+        results_list.append({
+            "Trait": trait_name,
+            "P-Value": p_value,
+            "Odds-Ratio": odds_ratio,
+            "a": a, "b": total_sample_size - a, "c": c, "d": total_background_only_size - c,
+        })
             
     # Create and return the final DataFrame 
     if not results_list:
         return pl.DataFrame()
         
     return pl.DataFrame(results_list).sort("P-Value")
+
+def apply_correction(results_df: pl.DataFrame, method: str, p_value_threshold: float) -> pl.DataFrame:
+    """
+    Applies a multiple testing correction to a DataFrame of enrichment results.
+
+    Args:
+        results_df (pl.DataFrame): The raw, uncorrected results from perform_enrichment.
+        method (str): The correction method to use ('fdr_bh', 'bonferroni', or 'none').
+        p_value_threshold (float): The significance threshold.
+
+    Returns:
+        pl.DataFrame: A filtered DataFrame containing only the significant results after correction.
+    """
+    if results_df.is_empty():
+        return results_df
+
+    if method == 'none':
+        print("Applying no multiple testing correction.", file=sys.stderr)
+        # Filter by the original P-Value and create a new column for P-adj
+        return results_df.filter(
+            pl.col("P-Value") < p_value_threshold
+        ).with_columns(
+            pl.col("P-Value").alias("P-adj")
+        )
+
+    # the multipletests function only works with a list of p-values, so we extract them
+    p_values = results_df["P-Value"]
+    
+    # Use statsmodels to perform the correction
+    try:
+        reject, pvals_corrected, _, _ = multipletests(
+            pvals=p_values, 
+            alpha=p_value_threshold, 
+            method=method, 
+            is_sorted=False
+        )
+    except ValueError as e:
+        print(f"Error applying multiple testing correction: {e}", file=sys.stderr)
+        sys.exit(1)
+    
+    # Add the adjusted p-values as a new column
+    corrected_df = results_df.with_columns(
+        pl.Series(name="P-adj", values=pvals_corrected)
+    )
+    
+    # Filter the DataFrame based on the new adjusted p-values
+    significant_results = corrected_df.filter(
+        pl.col("P-adj") < p_value_threshold
+    )
+    
+    print(f"Applied '{method}' correction. Found {len(significant_results)} significant results.", file=sys.stderr)
+    
+    return significant_results.sort("P-adj")
 
 def get_background_df(background_name: str, user_dir: Path):
     if background_name == USER_CUSTOM_BACKGROUND_NAME:
@@ -169,6 +223,8 @@ def main():
     parser.add_argument("--user_dir", help="Path to the user directory.")
     parser.add_argument("--background_name", help="Name of the background annotation file.")
     parser.add_argument("--p_value", type=float, default=0.05, help="P-value threshold for significance.")
+    parser.add_argument("--correction", default='none',  help="Multiple testing correction method to apply.")
+
     args = parser.parse_args()
     user_dir = Path(args.user_dir)
 
@@ -182,8 +238,8 @@ def main():
 
     # Run Analysis 
     print("Starting enrichment analysis...", file=sys.stderr)
-    
-    results_df = perform_enrichment(background_df, sample_df, args.p_value)
+    raw_results_df = perform_enrichment(background_df, sample_df)
+    final_results_df = apply_correction(raw_results_df, args.correction, args.p_value)
 
     # Save Results 
     # Check if output directory exists, create if not
@@ -191,7 +247,7 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
     destination = output_dir/ OUTPUT_FILE_NAME
     
-    results_df.write_csv(destination, separator="\t")
+    final_results_df.write_csv(destination, separator="\t")
     print(f"Significant results saved to: {destination}")
 
 
