@@ -7,6 +7,7 @@ import uuid
 import shutil 
 import altair as alt
 import polars as pl
+import numpy as np
 from statsmodels.stats.multitest import multitest_methods_names
 
 APP_DIR = pathlib.Path(__file__).parent
@@ -72,21 +73,28 @@ def create_dot_plot(df: pd.DataFrame):
     # We can do .head() becouse they are already sorted by P-Value in the DataFrame
     df_to_plot = df.head(20).copy()
 
+    min_p_val = df_to_plot['P-Value'].min()
+    max_p_val = df_to_plot['P-Value'].max()
+
+    # Create a list of 5 evenly-spaced values for the legend, 
+    # ensuring the min and max from the data are included.
+    legend_p_values = np.linspace(min_p_val, max_p_val, 5).tolist()
+
     # We need to sort the traits for the y-axis based on P-Value for a clean look
-    sort_order = df_to_plot.sort_values("P-adj")["Trait"].tolist()
+    sort_order = df_to_plot.sort_values("P-Value")["Trait"].tolist()
 
     chart = alt.Chart(df_to_plot).mark_circle().encode(
         y=alt.Y('Trait:N', sort=sort_order, title="Enriched Trait"),
-        x=alt.X('Odds-Ratio:Q', title="Odds Ratio"),
-        color=alt.Color('P-adj:Q', 
-                        scale=alt.Scale(scheme='lightgreyred', reverse=True), 
-                        title="P-adj"),
+        x=alt.X('Odds-Ratio:Q', title="Odds Ratio", scale=alt.Scale(zero=False)),
+        color=alt.Color('P-Value:Q', 
+                        scale=alt.Scale(scheme='yelloworangered', reverse=True), 
+                        title="P-Value" ,legend=alt.Legend(format=".2e",values=legend_p_values)),
         
         size=alt.Size('a:Q', title="Count in Sample"),
 
         tooltip=[
             alt.Tooltip('Trait:N'),
-            alt.Tooltip('P-adj:Q', format=".2e"), 
+            alt.Tooltip('P-Value:Q', format=".2e"), 
             alt.Tooltip('Odds-Ratio:Q', format=".2f"),
             alt.Tooltip('a:Q', title="Sample Hits")
         ]
@@ -119,7 +127,6 @@ def run_enrichment_pipeline(user_dir: pathlib.Path, background: str, p_value: fl
     """
     command = ['bash', str(MASTER_SCRIPT_PATH), str(user_dir), str(background), str(p_value), str(correction_method)]
     
-    st.info("Starting analysis pipeline...")
     st.markdown("---")
 
     with st.spinner("Running enrichment analysis. We'll be right back with results!"):
@@ -191,7 +198,9 @@ def display_single_module_results(module_name: str, file_path: pathlib.Path) -> 
         st.altair_chart(dot_plot, use_container_width=True)
         
         with st.expander("Show Full Data Table"):
-            st.dataframe(df)
+            float_cols = df.select_dtypes(include='float').columns
+            format_dict = {col: '{:.2e}' for col in float_cols}
+            st.dataframe(df.style.format(format_dict))
         
         return True
 

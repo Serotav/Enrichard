@@ -1,4 +1,3 @@
-import pandas as pd
 import polars as pl
 from scipy.stats import fisher_exact
 import sys
@@ -188,7 +187,7 @@ def apply_correction(results_df: pl.DataFrame, method: str, p_value_threshold: f
             alpha=p_value_threshold, 
             method=method, 
             is_sorted=False
-        )
+        )   
     except ValueError as e:
         print(f"Error applying multiple testing correction: {e}", file=sys.stderr)
         sys.exit(1)
