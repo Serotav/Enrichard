@@ -19,6 +19,8 @@ USER_MODULE_OUTPUT = os.getenv("USER_MODULE_OUTPUT")
 OUTPUT_FILE_NAME = str(APP_DIR.name) + ".tsv"
 LOOK_UP_TABLE = APP_DIR / "lookup.tsv"
 
+BITS_PER_CHUNK = 64
+
 def merge_background():
     
     source_files = [
@@ -67,74 +69,90 @@ def custom_background(user_background_file: Path) -> pl.DataFrame:
 
 def perform_enrichment(background_bitset_df: pl.DataFrame, sample_probes_df: pl.DataFrame) -> pl.DataFrame:
     """
-    Performs Fisher's exact test using a Polars backend for fast counting.
+    Performs Fisher's exact test using a fully vectorized Polars backend.
+    This version correctly calculates totals to match the original logic.
     """
-    #  Preparation 
+ 
     try:
         lookup_df = pl.read_csv(LOOK_UP_TABLE, separator='\t')
     except FileNotFoundError:
         print(f"Error: Lookup table not found at {LOOK_UP_TABLE}", file=sys.stderr)
         sys.exit(1)
 
-    # Pre-calculate which probes in the background are part of the user's sample.
-    background_df = background_bitset_df.with_columns(
-        is_in_sample=pl.col(PROBE_ID_COL).is_in(sample_probes_df[PROBE_ID_COL].unique())
+    # Crete the sample df, and the background df with the `is_in_sample` column
+    probe_id_dtype = background_bitset_df.get_column(PROBE_ID_COL).dtype
+    sample_ids = sample_probes_df.select(
+        pl.col(PROBE_ID_COL).unique().cast(probe_id_dtype),
+        pl.lit(True).alias("is_in_sample_marker")
     )
-    
-    # Pre-calculate total counts for efficiency inside the loop
+
+    background_df = background_bitset_df.join(
+        sample_ids, on=PROBE_ID_COL, how="left"
+    ).with_columns(
+        is_in_sample=pl.col("is_in_sample_marker").fill_null(False)
+    ).drop("is_in_sample_marker")
+
+ 
+    # Calculate totals 
     total_sample_size = background_df.filter(pl.col("is_in_sample")).height
+    if total_sample_size == 0:
+        print("Warning: No probes from the sample were found in the background set.", file=sys.stderr)
+        return pl.DataFrame()
     total_background_only_size = background_df.height - total_sample_size
     
-    BITS_PER_CHUNK = 64
-    results_list = []
-
-    # Iterate and Test Each Trait
-    # TODO: rewrite this to use Polars expressions instead of iterating over rows
+    # Generate Aggregation Expressions, now we are defining how each trait WILL BE CHECKED
+    # So now we are not evauating shit, just telling polars how to do de calculations next
+    aggs = []
     for row in lookup_df.iter_rows(named=True):
         trait_name, bit_pos = row['trait'], row['index']
-        
-        # Determine the correct bitset column and the bitmask to check for this trait
         chunk_id = bit_pos // BITS_PER_CHUNK
         bitmask_to_check = 1 << (bit_pos % BITS_PER_CHUNK)
         col_to_check = f"bitset_{chunk_id}"
-
-        # This expression checks if the trait's bit is set.
         has_trait_expr = (pl.col(col_to_check) & bitmask_to_check) > 0
+        aggs.append(has_trait_expr.sum().alias(trait_name))
 
-        # Build the 2x2 contingency table using Polars expressions
-        counts = background_df.select(
-            # 'a': Probes IN sample that HAVE the trait
-            a=has_trait_expr.filter(pl.col("is_in_sample")).sum(),
-            # 'c': Probes NOT in sample that HAVE the trait
-            c=has_trait_expr.filter(~pl.col("is_in_sample")).sum()
-        ).row(0)
-        
-        a, c = counts[0], counts[1]
+    # Execute all the queries at once
+    counts_wide_df = background_df.group_by("is_in_sample", maintain_order=True).agg(aggs)
+    
+    # Reshape, Pivot, and create the contingency table for a and c
+    contingency_table_df = counts_wide_df.unpivot(
+        index="is_in_sample", variable_name="Trait", value_name="count"
+    ).pivot(
+        index="Trait", columns="is_in_sample", values="count"
+    ).rename({"true": "a", "false": "c"})
 
-        # If no probes have this trait, skip the test
-        if a + c == 0:
-            continue
-        
-        # Calculate 'b' and 'd' from the totals
-        b = total_sample_size - a
-        d = total_background_only_size - c
-        
-        # Run Fisher's Exact Test 
-        odds_ratio, p_value = fisher_exact([[a, b], [c, d]], alternative='greater')
-        
-        # Store significant results 
-        results_list.append({
-            "Trait": trait_name,
-            "P-Value": p_value,
-            "Odds-Ratio": odds_ratio,
-            "a": a, "b": total_sample_size - a, "c": c, "d": total_background_only_size - c,
-        })
-            
-    # Create and return the final DataFrame 
-    if not results_list:
+    # Calculate b and d, and filter out traits with no members
+    results_df = contingency_table_df.filter(
+        (pl.col("a") + pl.col("c")) > 0
+    ).with_columns(
+        b=pl.lit(total_sample_size) - pl.col("a"),
+        d=pl.lit(total_background_only_size) - pl.col("c")
+    )
+    
+    if results_df.is_empty():
         return pl.DataFrame()
-        
-    return pl.DataFrame(results_list).sort("P-Value")
+
+    # Run Fisher's Test and Unnest the results
+    def run_fisher(s):
+        odds_ratio, p_value = fisher_exact([[s["a"], s["b"]], [s["c"], s["d"]]], alternative='greater')
+        return {"Odds-Ratio": odds_ratio, "P-Value": p_value}
+
+    results_with_fisher_struct = results_df.with_columns(
+        pl.struct(["a", "b", "c", "d"]).map_elements(
+            run_fisher,
+            return_dtype=pl.Struct([
+                pl.Field("Odds-Ratio", pl.Float64),
+                pl.Field("P-Value", pl.Float64)
+            ])
+        ).alias("fisher_struct")
+    )
+    
+    # Format final output
+    final_df = results_with_fisher_struct.unnest("fisher_struct").select(
+        "Trait", "P-Value", "Odds-Ratio", "a", "b", "c", "d"
+    ).sort("P-Value")
+
+    return final_df
 
 def apply_correction(results_df: pl.DataFrame, method: str, p_value_threshold: float) -> pl.DataFrame:
     """

@@ -16,7 +16,6 @@ for module_dir in $MODULES_DIR/*/; do
             bash "$module_dir/enrich.sh" $USER_DIR $BACKGROUND_NAME $P_VALUE $CORRECTION
         fi
     fi
-    break
 done
 
 wait 
