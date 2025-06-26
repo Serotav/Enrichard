@@ -117,7 +117,7 @@ def perform_enrichment(background_bitset_df: pl.DataFrame, sample_probes_df: pl.
     contingency_table_df = counts_wide_df.unpivot(
         index="is_in_sample", variable_name="Trait", value_name="count"
     ).pivot(
-        index="Trait", columns="is_in_sample", values="count"
+        index="Trait", on="is_in_sample", values="count"
     ).rename({"true": "a", "false": "c"})
 
     # Calculate b and d, and filter out traits with no members
@@ -134,21 +134,29 @@ def perform_enrichment(background_bitset_df: pl.DataFrame, sample_probes_df: pl.
     # Run Fisher's Test and Unnest the results
     def run_fisher(s):
         odds_ratio, p_value = fisher_exact([[s["a"], s["b"]], [s["c"], s["d"]]], alternative='greater')
-        return {"Odds-Ratio": odds_ratio, "P-Value": p_value}
+        return {"P-Value": p_value}
+
+    freq_in_sample = pl.col("a") / total_sample_size
+    freq_in_background = pl.col("c") / total_background_only_size
 
     results_with_fisher_struct = results_df.with_columns(
         pl.struct(["a", "b", "c", "d"]).map_elements(
             run_fisher,
             return_dtype=pl.Struct([
-                pl.Field("Odds-Ratio", pl.Float64),
                 pl.Field("P-Value", pl.Float64)
             ])
-        ).alias("fisher_struct")
+        ).alias("fisher_struct"),
+
+        pl.when(freq_in_background > 0)
+          .then(freq_in_sample / freq_in_background)
+          .otherwise(None) # Set to null if background frequency is 0 to avoid 'inf'
+          .alias("Fold-Change")
+    
     )
     
     # Format final output
     final_df = results_with_fisher_struct.unnest("fisher_struct").select(
-        "Trait", "P-Value", "Odds-Ratio", "a", "b", "c", "d"
+        "Trait", "P-Value", "Fold-Change", "a", "b", "c", "d"
     ).sort("P-Value")
 
     return final_df
@@ -169,7 +177,6 @@ def apply_correction(results_df: pl.DataFrame, method: str, p_value_threshold: f
         return results_df
 
     if method == 'none':
-        print("Applying no multiple testing correction.", file=sys.stderr)
         # Filter by the original P-Value and create a new column for P-adj
         return results_df.filter(
             pl.col("P-Value") < p_value_threshold
@@ -254,7 +261,6 @@ def main():
         sys.exit(1)
 
     # Run Analysis 
-    print("Starting enrichment analysis...", file=sys.stderr)
     raw_results_df = perform_enrichment(background_df, sample_df)
     final_results_df = apply_correction(raw_results_df, args.correction, args.p_value)
 
@@ -265,7 +271,6 @@ def main():
     destination = output_dir/ OUTPUT_FILE_NAME
     
     final_results_df.write_csv(destination, separator="\t")
-    print(f"Significant results saved to: {destination}")
 
 
 if __name__ == "__main__":

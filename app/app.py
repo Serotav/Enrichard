@@ -85,7 +85,7 @@ def create_dot_plot(df: pd.DataFrame):
 
     chart = alt.Chart(df_to_plot).mark_circle().encode(
         y=alt.Y('Trait:N', sort=sort_order, title="Enriched Trait"),
-        x=alt.X('Odds-Ratio:Q', title="Odds Ratio", scale=alt.Scale(zero=False)),
+        x=alt.X('Fold-Change:Q', title="Fold Change", scale=alt.Scale(zero=False)),
         color=alt.Color('P-Value:Q', 
                         scale=alt.Scale(scheme='yelloworangered', reverse=True), 
                         title="P-Value" ,legend=alt.Legend(format=".2e",values=legend_p_values)),
@@ -95,7 +95,7 @@ def create_dot_plot(df: pd.DataFrame):
         tooltip=[
             alt.Tooltip('Trait:N'),
             alt.Tooltip('P-Value:Q', format=".2e"), 
-            alt.Tooltip('Odds-Ratio:Q', format=".2f"),
+            alt.Tooltip('Fold-Change:Q', format=".2f"),
             alt.Tooltip('a:Q', title="Sample Hits")
         ]
     ).properties(
