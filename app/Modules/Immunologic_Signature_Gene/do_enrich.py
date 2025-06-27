@@ -204,6 +204,7 @@ def apply_correction(results_df: pl.DataFrame, method: str, p_value_threshold: f
     return significant_results.sort("P-adj")
 
 def get_background_df(background_name: str, user_dir: Path):
+    background_name += "."
     if background_name == USER_CUSTOM_BACKGROUND_NAME:
         print("Processing custom background...", file=sys.stderr)
         # The user's custom background file was saved in their session directory
