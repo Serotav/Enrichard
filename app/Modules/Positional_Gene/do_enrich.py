@@ -14,7 +14,6 @@ PROBE_ID_COL = "Probe_ID"
 
 USER_CUSTOM_BACKGROUND_NAME = os.getenv("USER_CUSTOM_BACKGROUND_NAME")
 USER_SAMPLE_NAME = os.getenv("USER_SAMPLE_NAME")
-USER_MODULE_OUTPUT = os.getenv("USER_MODULE_OUTPUT")
 OUTPUT_FILE_NAME = str(APP_DIR.name) + ".tsv"
 LOOK_UP_TABLE = APP_DIR / "lookup.tsv"
 
@@ -134,18 +133,16 @@ def perform_enrichment(background_bitset_df: pl.DataFrame, sample_probes_df: pl.
     # Run Fisher's Test and Unnest the results
     def run_fisher(s):
         odds_ratio, p_value = fisher_exact([[s["a"], s["b"]], [s["c"], s["d"]]], alternative='greater')
-        return {"P-Value": p_value}
+        return p_value
 
     freq_in_sample = pl.col("a") / total_sample_size
     freq_in_background = pl.col("c") / total_background_only_size
 
-    results_with_fisher_struct = results_df.with_columns(
+    final_df = results_df.with_columns(
         pl.struct(["a", "b", "c", "d"]).map_elements(
             run_fisher,
-            return_dtype=pl.Struct([
-                pl.Field("P-Value", pl.Float64)
-            ])
-        ).alias("fisher_struct"),
+            return_dtype=pl.Float64
+        ).alias("P-Value"),
 
         pl.when(freq_in_background > 0)
           .then(freq_in_sample / freq_in_background)
@@ -153,11 +150,6 @@ def perform_enrichment(background_bitset_df: pl.DataFrame, sample_probes_df: pl.
           .alias("Fold-Change")
     
     )
-    
-    # Format final output
-    final_df = results_with_fisher_struct.unnest("fisher_struct").select(
-        "Trait", "P-Value", "Fold-Change", "a", "b", "c", "d"
-    ).sort("P-Value")
 
     return final_df
 
@@ -209,8 +201,6 @@ def apply_correction(results_df: pl.DataFrame, method: str, p_value_threshold: f
         pl.col("P-adj") < p_value_threshold
     )
     
-    print(f"Applied '{method}' correction. Found {len(significant_results)} significant results.", file=sys.stderr)
-    
     return significant_results.sort("P-adj")
 
 def get_background_df(background_name: str, user_dir: Path):
@@ -248,10 +238,11 @@ def main():
     parser.add_argument("--background_name", help="Name of the background annotation file.")
     parser.add_argument("--p_value", type=float, default=0.05, help="P-value threshold for significance.")
     parser.add_argument("--correction", default='none',  help="Multiple testing correction method to apply.")
+    parser.add_argument("--output_folder", help="Path to the output folder where results will be saved.")
 
     args = parser.parse_args()
     user_dir = Path(args.user_dir)
-
+    print(f"User directory: {user_dir}", file=sys.stderr)
     # Load Data 
     try:
         background_df = get_background_df(args.background_name, user_dir)
@@ -266,7 +257,7 @@ def main():
 
     # Save Results 
     # Check if output directory exists, create if not
-    output_dir = pathlib.Path(args.user_dir) / USER_MODULE_OUTPUT / APP_DIR.name
+    output_dir = pathlib.Path(args.output_folder) / APP_DIR.name
     output_dir.mkdir(parents=True, exist_ok=True)
     destination = output_dir/ OUTPUT_FILE_NAME
     
