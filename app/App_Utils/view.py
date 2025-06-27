@@ -25,7 +25,7 @@ def create_dot_plot(df: pd.DataFrame)->None:
     # We need to sort the traits for the y-axis based on P-Value for a clean look
     sort_order = df_to_plot.sort_values("P-Value")["Trait"].tolist()
 
-    alt.Chart(df_to_plot).mark_circle().encode(
+    return alt.Chart(df_to_plot).mark_circle().encode(
         y=alt.Y('Trait:N', sort=sort_order, title="Enriched Trait"),
         x=alt.X('Fold-Change:Q', title="Fold Change", scale=alt.Scale(zero=False)),
         color=alt.Color('P-Value:Q', 
@@ -126,7 +126,6 @@ def display_single_module_results(module_name: str, file_path: pathlib.Path) -> 
     st.markdown(f"#### Module: `{module_name}`")
     try:
         df = pl.read_csv(file_path, separator='\t').to_pandas()
-        
         if df.empty:
             st.info("This module produced no significant results.")
             return False
@@ -148,14 +147,14 @@ def display_single_module_results(module_name: str, file_path: pathlib.Path) -> 
         st.info("This module produced no significant results (empty file).")
         return False
     except Exception as e:
-        st.error(f"Error reading or processing result file '{file_path.name}': {e}")
+        st.error(f"Error reading or processing result file '{file_path.name} {file_path}': {e}")
         return False
     
-def display_single_sample_results()->None:
+def display_single_sample_results(module_output:str)->None:
     """
     Scans for result files, creates tabs, and displays results and methodology.
     """
-    module_output = st.session_state.user_dir / USER_MODULE_OUTPUT
+    module_output = pathlib.Path(module_output)
     result_files = sorted(list(module_output.glob('*/*.tsv')))
     
     if not result_files:

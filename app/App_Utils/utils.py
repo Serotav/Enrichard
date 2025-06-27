@@ -66,3 +66,68 @@ def copy_example_file(source_path: pathlib.Path, destination_path: pathlib.Path)
     except Exception as e:
         st.error(f"Failed to copy example file '{source_path.name}': {e}")
         st.stop()
+
+def top_style():
+    st.markdown(
+        """
+        <style>
+            /* The banner styling */
+            .fixed-header {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                background-color: #ecebe3;  
+                border-bottom: 1px solid #d3d2ca; 
+                color: #3d3a2a;             
+                padding: 10px 0;
+                z-index: 999;
+                
+                /* Flexbox for alignment */
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+            
+            /* Styling for the link within the banner */
+            .fixed-header a {
+                color: #3d3a2a;  /
+                text-decoration: none;
+                font-weight: 500;
+            }
+
+            .fixed-header a:hover {
+                color: #bb5a38; 
+                text-decoration: none;
+            }
+            
+            /* Styling for the inline SVG GitHub logo */
+            .github-logo {
+                height: 22px;       
+                width: 22px;
+                margin-right: 10px; 
+                fill: currentColor; 
+            }
+
+            /* Hide the default Streamlit menu */
+            [data-testid="stToolbar"] {
+                display: none !important;
+            }
+
+            /* Push the main app content down to avoid overlap */
+            .main .block-container {
+                padding-top: 5rem;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+    
+    st.markdown(
+        """
+        <div class="fixed-header">
+            <a href="https://github.com/Serotav/Enrichard" target="_blank">Check out the source on GitHub</a>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )

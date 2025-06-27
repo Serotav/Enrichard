@@ -8,9 +8,12 @@ from App_Utils.utils import *
 from App_Utils.pipeline import *
 from App_Utils.view import *
 
+
+
 def main():
     st.set_page_config(layout="wide")
 
+    top_style()
     st.markdown("<h1 style='text-align: center;'>🚀 E N R I C H A R D 🚀</h1>", unsafe_allow_html=True)
     st.subheader("CpG Site Enrichment Analysis")
     initialize_session()
@@ -148,11 +151,11 @@ def main():
                     save_uploaded_file(custom_background_file, user_dir / USER_CUSTOM_BACKGROUND_NAME)
 
                 run_enrichment_pipeline(user_dir, output_dir, background, p_value_threshold, selected_correction_method)
-                display_single_sample_results()
+                display_single_sample_results(output_dir)
             
             elif analysis_type == "Two Sample Comparison":
-                user_sample_a_path = user_dir / "Sample_A"
-                user_sample_b_path = user_dir / "Sample_B"
+                user_sample_a_path = user_dir / TOW_SAMPLE_COMPARISON_NAME_1
+                user_sample_b_path = user_dir / TOW_SAMPLE_COMPARISON_NAME_2
                 
                 user_sample_a_path.mkdir(parents=True, exist_ok=True)
                 user_sample_b_path.mkdir(parents=True, exist_ok=True)
@@ -176,7 +179,19 @@ def main():
             
     else:
         st.info("Please provide the required sample file(s) to proceed.")
-
+    
+    st.markdown("---")
+    footer_html = """
+    <div style="text-align: center; padding-top: 20px; color: grey;">
+        <p>
+            An open-source project. Find the code on 
+            <a href="https://github.com/Serotav/Enrichard" target="_blank" style="color: grey; text-decoration: underline;">
+            GitHub
+            </a>.
+        </p>
+    </div>
+    """
+    st.markdown(footer_html, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()  
