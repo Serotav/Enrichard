@@ -13,7 +13,6 @@ from App_Utils.view import *
 def main():
     st.set_page_config(layout="wide")
 
-    top_style()
     st.markdown("<h1 style='text-align: center;'>🚀 E N R I C H A R D 🚀</h1>", unsafe_allow_html=True)
     st.subheader("CpG Site Enrichment Analysis")
     initialize_session()
@@ -184,10 +183,10 @@ def main():
     footer_html = """
     <div style="text-align: center; padding-top: 20px; color: grey;">
         <p>
-            An open-source project. Find the code on 
+            This is an open-source project. Check out the code on 
             <a href="https://github.com/Serotav/Enrichard" target="_blank" style="color: grey; text-decoration: underline;">
             GitHub
-            </a>.
+            </a>
         </p>
     </div>
     """

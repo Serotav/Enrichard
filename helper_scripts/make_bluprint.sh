@@ -14,16 +14,33 @@ wehi_sets=(
 "Immunologic_Signature_Gene,https://bioinf.wehi.edu.au/MSigDB/v7.1/Hs.c7.all.v7.1.entrez.rds"
 )
 
+# Check if a number argument was provided
+if [[ $# -gt 0 && $1 =~ ^[0-9]+$ ]]; then
+    num=$1
+    echo "Number argument provided: $num"
+else
+    num=0
+    echo "No valid number argument provided, processing all items"
+fi
+
 echo $COMMON_BACKGROUND
 rm "$COMMON_BACKGROUND"/*
 
 rm -rf "$MODULES_DIR"
 mkdir -p "$MODULES_DIR"
 
+counter=0
 for item in "${wehi_sets[@]}"; do
     IFS=',' read -r set url <<< "$item"
     printf "%-30s %s\n" "$set" "$url"
     cp -r $WEHI_TEMPLATE "$MODULES_DIR/$set"
     echo "$url" > "$MODULES_DIR/$set/source_url.txt"
+    
+    # Increment counter and check if we should break
+    counter=$((counter + 1))
+    if [[ $num -ne 0 && $counter -eq $num ]]; then
+        echo "Breaking loop at iteration $num"
+        break
+    fi
 done
 

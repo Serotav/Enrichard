@@ -32,8 +32,7 @@ def merge_background():
 
     # ALWAYS READ WITH THE RIGHT TYPES OR INT64 INSTREAD OF UINT64 WILL CRASH US  
     first_file_path = source_files[0]
-    with open(first_file_path, 'r') as f:
-        header = f.readline().strip().split('\t')
+    header = pl.scan_csv(first_file_path, separator='\t', n_rows=0).collect_schema().names()
     
     schema_overrides = {col: pl.UInt64 for col in header if col.startswith("bitset_")}
 
@@ -52,8 +51,7 @@ def custom_background(user_background_file: Path) -> pl.DataFrame:
     if not MERGE_PATH.exists():
         merge_df = merge_background()
     else: 
-        with open(MERGE_PATH, 'r') as f:
-            header = f.readline().strip().split('\t')
+        header = pl.scan_csv(MERGE_PATH, separator='\t', n_rows=0).collect_schema().names()
         
         # ALWAYS READ WITH THE RIGHT TYPES OR INT64 INSTREAD OF UINT64 WILL CRASH US  
         schema_overrides = { col: pl.UInt64 for col in header if col.startswith("bitset_")}
@@ -204,7 +202,6 @@ def apply_correction(results_df: pl.DataFrame, method: str, p_value_threshold: f
     return significant_results.sort("P-adj")
 
 def get_background_df(background_name: str, user_dir: Path):
-    background_name += "."
     if background_name == USER_CUSTOM_BACKGROUND_NAME:
         print("Processing custom background...", file=sys.stderr)
         # The user's custom background file was saved in their session directory
@@ -212,6 +209,7 @@ def get_background_df(background_name: str, user_dir: Path):
         return custom_background(user_background_file)
     
     # Find a file in BACKGROUND_DIR that starts with args.background_name
+    background_name += "."
     background_dir = pathlib.Path(BACKGROUND_DIR)
     matching_files = list(background_dir.glob(f"{background_name}*"))
     if not matching_files or len(matching_files) > 1:
@@ -220,9 +218,10 @@ def get_background_df(background_name: str, user_dir: Path):
     
     # Read with the right types
     file_path = matching_files[0]
-    with open(file_path, 'r') as f:
-        header = f.readline().strip().split('\t')
-    schema_overrides = {col: pl.UInt64 for col in header[1:]} 
+
+    header = pl.scan_csv(file_path, separator='\t', n_rows=0).collect_schema().names()
+
+    schema_overrides = {col: pl.UInt64 if col.startswith('bitset_') else pl.String for col in header} 
     df = pl.read_csv(
         file_path,
         separator='\t',
