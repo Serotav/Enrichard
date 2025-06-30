@@ -4,11 +4,13 @@ TRAIT_TO_DOWNLOAD=$(cat "$SCRIPT_DIR/source_url.txt")
 
 BACKGROUND_DIR="$SCRIPT_DIR/background"
 RAW_BACKGROUND_DIR="$SCRIPT_DIR/raw_background"
-ANNOTATE_SCRIPT_PY="$SCRIPT_DIR/annotate.py"
+CACHED_DIR="$SCRIPT_DIR/cached"
 RDATA_DIR="$SCRIPT_DIR/rdata"
+
+ANNOTATE_SCRIPT_PY="$SCRIPT_DIR/annotate.py"
 ANNOTATE_SCRIPT_R="$SCRIPT_DIR/GL2EntrezID.r"
 
-mkdir -p "$RAW_BACKGROUND_DIR" "$BACKGROUND_DIR" "$RDATA_DIR" 
+mkdir -p "$RAW_BACKGROUND_DIR" "$BACKGROUND_DIR" "$RDATA_DIR" "$CACHED_DIR"
 
 annotate_background() {
     local source_filepath="$1"
@@ -20,8 +22,8 @@ annotate_background() {
     time python3 $ANNOTATE_SCRIPT_PY \
     "$RAW_BACKGROUND_DIR/${filename%.tsv.gz}_EnterezId.tsv" \
     "$BACKGROUND_DIR/${filename%.tsv.gz}_annotated.parquet"\
-    $RDATA_DIR/* 
-
+    $RDATA_DIR/* \
+    "$CACHED_DIR/${filename%_EnterezId.tsv}_cached.parquet" 
 }
 
 # Check if BACKGROUND_DIR is empty if not then skip this

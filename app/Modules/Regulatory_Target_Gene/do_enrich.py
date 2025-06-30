@@ -61,6 +61,66 @@ def custom_background(user_background_file: Path) -> pl.DataFrame:
     
     return custom_annotated_df
 
+def perform_enrichment_from_cache(cache_df: pl.DataFrame,background_df: pl.DataFrame, sample_probes_df: pl.DataFrame) -> pl.DataFrame:
+    """
+    Performs Fisher's exact test using a cached traits counts.
+    """
+    probe_id_dtype = background_df.get_column(PROBE_ID_COL).dtype
+    sample_ids = sample_probes_df.select(
+        pl.col(PROBE_ID_COL).unique().cast(probe_id_dtype),
+    )
+
+    sample_df = background_df.join(
+        sample_ids, on=PROBE_ID_COL, how="inner"
+    )
+
+    contingency_table_df = sample_df.select(
+        [pl.col(col).sum().alias(col)for col in sample_df.columns if col != PROBE_ID_COL]
+    ).unpivot(index=[], variable_name="Trait", value_name="a")
+
+    total_sample_size = sample_df.height
+    total_background_only_size = background_df.height - total_sample_size
+
+    results_df = cache_df.lazy().join(contingency_table_df.lazy(), on='Trait', how="inner").with_columns(
+        a = pl.col('a'),
+        c = pl.col('totals') - pl.col('a')
+    ).drop('totals').filter(
+        (pl.col("a") + pl.col("c")) > 0
+    ).with_columns(
+        b=pl.lit(total_sample_size) - pl.col("a"),
+        d=pl.lit(total_background_only_size) - pl.col("c")
+    ).collect()
+
+    if results_df.is_empty():
+        return pl.DataFrame()
+
+
+    if results_df.is_empty():
+        return pl.DataFrame()
+
+    # Run Fisher's Test and Unnest the results
+    def run_fisher(s):
+        odds_ratio, p_value = fisher_exact([[s["a"], s["b"]], [s["c"], s["d"]]], alternative='greater')
+        return p_value
+
+    freq_in_sample = pl.col("a") / total_sample_size
+    freq_in_background = pl.col("c") / total_background_only_size
+
+    final_df = results_df.with_columns(
+        pl.struct(["a", "b", "c", "d"]).map_elements(
+            run_fisher,
+            return_dtype=pl.Float64
+        ).alias("P-Value"),
+
+        pl.when(freq_in_background > 0)
+          .then(freq_in_sample / freq_in_background)
+          .otherwise(None) # Set to null if background frequency is 0 to avoid 'inf'
+          .alias("Fold-Change")
+    
+    )
+
+    return final_df
+
 
 def perform_enrichment(background_df: pl.DataFrame, sample_probes_df: pl.DataFrame) -> pl.DataFrame:
     """
@@ -73,7 +133,6 @@ def perform_enrichment(background_df: pl.DataFrame, sample_probes_df: pl.DataFra
         pl.col(PROBE_ID_COL).unique().cast(probe_id_dtype),
         pl.lit(True).alias("is_in_sample_marker")
     )
-
 
     background_df = background_df.join(
         sample_ids, on=PROBE_ID_COL, how="left"
@@ -89,11 +148,11 @@ def perform_enrichment(background_df: pl.DataFrame, sample_probes_df: pl.DataFra
         print("Warning: No probes from the sample were found in the background set.", file=sys.stderr)
         return pl.DataFrame()
 
-    contingency_table_df = background_df.group_by("is_in_sample").agg(
-        [pl.col(col).sum().alias(col) for col in background_df.columns if col != PROBE_ID_COL and col != "is_in_sample"]
+    contingency_table_df = background_df.group_by("is_in_sample"
+    ).agg([pl.col(col).sum().alias(col) for col in background_df.columns if col != PROBE_ID_COL and col != "is_in_sample"]
     ).unpivot(index="is_in_sample", variable_name="Trait", value_name="count"
-    ).pivot(index="Trait", on="is_in_sample", values="count").rename(
-        {"true": "a", "false": "c"}
+    ).pivot(index="Trait", on="is_in_sample", values="count"
+    ).rename({"true": "a", "false": "c"}
     ).fill_null(0)
     
     
@@ -188,7 +247,7 @@ def apply_correction(results_df: pl.DataFrame, method: str, p_value_threshold: f
     
     return significant_results.sort("P-adj")
 
-def get_background_df(background_name: str, user_dir: Path):
+def get_background_df(background_name: str, user_dir: Path) -> pl.DataFrame:
     if background_name == USER_CUSTOM_BACKGROUND_NAME:
         print("Processing custom background...", file=sys.stderr)
         # The user's custom background file was saved in their session directory
@@ -211,7 +270,7 @@ def get_background_df(background_name: str, user_dir: Path):
     return pl.read_parquet(file_path)
 
 
-def main():
+def main()-> None:
 
     parser = argparse.ArgumentParser(description="Perform Fisher's exact test for enrichment analysis on CpG sites.")
     parser.add_argument("--user_dir", help="Path to the user directory.")
@@ -219,6 +278,7 @@ def main():
     parser.add_argument("--p_value", type=float, default=0.05, help="P-value threshold for significance.")
     parser.add_argument("--correction", default='none',  help="Multiple testing correction method to apply.")
     parser.add_argument("--output_folder", help="Path to the output folder where results will be saved.")
+    parser.add_argument("--cache_folder", help="Path to the cache folder.")
 
     args = parser.parse_args()
     user_dir = Path(args.user_dir)
@@ -231,10 +291,19 @@ def main():
         print(f"Error reading background or sample {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Run Analysis 
-    raw_results_df = perform_enrichment(background_df, sample_df)
-    final_results_df = apply_correction(raw_results_df, args.correction, args.p_value)
+    # Run Analysis
+    if args.background_name== USER_CUSTOM_BACKGROUND_NAME:
+        raw_results_df = perform_enrichment(background_df, sample_df)
+    else:
+        cache_path = list(Path(args.cache_folder).glob(f"{args.background_name}*"))
+        if not cache_path or len(cache_path) > 1:
+            print(f"Error: No cache file found for background '{args.background_name}' or multiple found [{len(cache_path)}].", file=sys.stderr)
+            sys.exit(1)
+        cache_df = pl.read_parquet(cache_path[0])
+        raw_results_df = perform_enrichment_from_cache(cache_df, background_df, sample_df)
 
+
+    final_results_df = apply_correction(raw_results_df, args.correction, args.p_value)
     # Save Results 
     # Check if output directory exists, create if not
     output_dir = pathlib.Path(args.output_folder) / APP_DIR.name
