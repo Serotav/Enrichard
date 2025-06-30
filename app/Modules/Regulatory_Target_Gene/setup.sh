@@ -19,7 +19,7 @@ annotate_background() {
     Rscript $ANNOTATE_SCRIPT_R "$RAW_BACKGROUND_DIR/${filename%.gz}" "$RAW_BACKGROUND_DIR/${filename%.tsv.gz}_EnterezId.tsv" 2> /dev/null
     time python3 $ANNOTATE_SCRIPT_PY \
     "$RAW_BACKGROUND_DIR/${filename%.tsv.gz}_EnterezId.tsv" \
-    "$BACKGROUND_DIR/${filename%.tsv.gz}_annotated.tsv"\
+    "$BACKGROUND_DIR/${filename%.tsv.gz}_annotated.parquet"\
     $RDATA_DIR/* 
 
 }

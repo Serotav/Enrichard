@@ -14,69 +14,46 @@ import pathlib
 ENTEREZID_COL = "EntrezID"
 PROBE_ID_COL = "Probe_ID"
 APP_DIR = pathlib.Path(__file__).parent
-LOOK_UP_TABLE = APP_DIR / "lookup.tsv"
 
 
-def annotate(lookup_df: pl.DataFrame, rdata_file_path: str, background_file_path: str, output_file: str):
+def annotate(rdata_file_path: str, background_file_path: str, output_file: str):
     '''
     Annotes a background file with trait data from an RDS file.
-    The result is a DF with a bitset for each probe ID, indicating which traits are associated with each EntrezID.
+    The result is a DF with a a col for each trait.
     '''
     # Load Data 
-    probe_df = pl.read_csv(background_file_path, separator='\t', null_values='NA').drop_nulls(ENTEREZID_COL)
+    probe_to_entrez_df = pl.read_csv(background_file_path, separator='\t', null_values='NA').drop_nulls(ENTEREZID_COL)
     raw_traits = read_rds(rdata_file_path)
 
-    # --- Pre-compute EntrezID -> Bitmask Map in Python ---
-    # First map entrez IDs to traits
-    entrez_to_traits_map = defaultdict(list)
-    for trait, eids in raw_traits.items():
-        if eids:
-            for eid_str in eids:
-                try: entrez_to_traits_map[int(eid_str)].append(trait)
-                except (ValueError, TypeError): continue
+    # Mapping Entrez IDs to traits
+    trait_to_entrez = {}
+    for trait, entrez_ids in raw_traits.items():
+        trait_to_entrez[trait] = [int(eid) for eid in entrez_ids]
 
-    trait_to_index_map = dict(zip(lookup_df["trait"], lookup_df["index"]))
+    trait_df_intermediate = pl.DataFrame([trait_to_entrez])
+
+
+    trait_df = trait_df_intermediate.unpivot(
+    index=[], on=list(trait_to_entrez.keys())
+    ).rename(
+        {'variable': 'Trait', 'value': 'EntrezID'}
+    ).explode(
+        'EntrezID'
+    )
+
     
-    BITS_PER_CHUNK = 64
-    num_chunks = ceil(lookup_df['index'].max() / BITS_PER_CHUNK)
+    merged_df = probe_to_entrez_df.join(trait_df, on='EntrezID', how='inner').with_columns(
+        pl.lit(1).cast(pl.UInt8).alias("has_trait")
+    )
+    
+    final_df = merged_df.pivot(
+        index="Probe_ID",
+        on="Trait",
+        values="has_trait",
+        aggregate_function="max"
+    ).fill_null(0)
 
-    # Pre-calculate bitmasks for each EntrezID 
-    entrez_bitmask_data = []
-    for entrez_id, traits in entrez_to_traits_map.items():
-        bitmask_array = [0] * num_chunks
-        for trait in traits:
-            if (bit_pos := trait_to_index_map.get(trait)) is not None:
-                bitmask_array[bit_pos // BITS_PER_CHUNK] |= (1 << (bit_pos % BITS_PER_CHUNK))
-        entrez_bitmask_data.append([entrez_id] + bitmask_array)
-
-    # ---  Build Final DataFrame with Polars ---
-    bitset_cols = [f"bitset_{i}" for i in range(num_chunks)]
-    # Define the correct schema from the start
-    schema = {ENTEREZID_COL: pl.Int64}
-    schema.update({col: pl.UInt64 for col in bitset_cols})
-
-    entrez_bitmask_df = pl.DataFrame(entrez_bitmask_data, schema=schema, orient="row")
-   
-    # Join, aggregate bitmasks with a bitwise OR, and create the final result in one chain.
-    final_df = (
-        probe_df.join(entrez_bitmask_df, on=ENTEREZID_COL, how="inner")
-        .group_by(PROBE_ID_COL)
-        .agg([pl.col(col).bitwise_or() for col in bitset_cols])
-    ).sort(PROBE_ID_COL)
-
-    final_df.write_csv(output_file, separator='\t', null_value='NA')
-
-
-def create_lookup_table(lookup_table:str, rdata_file:str):
-    if Path(lookup_table).exists():
-        return pl.read_csv(lookup_table, separator='\t', null_values='NA')
-
-    content = read_rds(rdata_file)
-    keys = sorted(content.keys())
-    values = [*range(len(keys))]
-    df = pl.DataFrame({'trait': keys, 'index': values})
-    df.write_csv(lookup_table, separator='\t', null_value='NA')
-    return df
+    final_df.write_parquet(output_file, compression='lz4')
 
 
 def parse_args():
@@ -115,9 +92,7 @@ def main():
         print(f"RDS directory {args.rdata_dir} does not exist or is not a directory.", file=stderr)
         return
     
-    lookup_df = create_lookup_table(LOOK_UP_TABLE, args.rdata_file)
     annotate(
-        lookup_df=lookup_df,
         rdata_file_path=args.rdata_file,
         background_file_path=args.input_file,
         output_file=args.output_file

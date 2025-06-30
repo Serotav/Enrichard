@@ -15,7 +15,6 @@ PROBE_ID_COL = "Probe_ID"
 USER_CUSTOM_BACKGROUND_NAME = os.getenv("USER_CUSTOM_BACKGROUND_NAME")
 USER_SAMPLE_NAME = os.getenv("USER_SAMPLE_NAME")
 OUTPUT_FILE_NAME = str(APP_DIR.name) + ".tsv"
-LOOK_UP_TABLE = APP_DIR / "lookup.tsv"
 
 BITS_PER_CHUNK = 64
 
@@ -63,61 +62,48 @@ def custom_background(user_background_file: Path) -> pl.DataFrame:
     return custom_annotated_df
 
 
-def perform_enrichment(background_bitset_df: pl.DataFrame, sample_probes_df: pl.DataFrame) -> pl.DataFrame:
+def perform_enrichment(background_df: pl.DataFrame, sample_probes_df: pl.DataFrame) -> pl.DataFrame:
     """
     Performs Fisher's exact test using a fully vectorized Polars backend.
-    This version correctly calculates totals to match the original logic.
     """
- 
-    try:
-        lookup_df = pl.read_csv(LOOK_UP_TABLE, separator='\t')
-    except FileNotFoundError:
-        print(f"Error: Lookup table not found at {LOOK_UP_TABLE}", file=sys.stderr)
-        sys.exit(1)
-
+   
     # Crete the sample df, and the background df with the `is_in_sample` column
-    probe_id_dtype = background_bitset_df.get_column(PROBE_ID_COL).dtype
+    probe_id_dtype = background_df.get_column(PROBE_ID_COL).dtype
     sample_ids = sample_probes_df.select(
         pl.col(PROBE_ID_COL).unique().cast(probe_id_dtype),
         pl.lit(True).alias("is_in_sample_marker")
     )
 
-    background_df = background_bitset_df.join(
+
+    background_df = background_df.join(
         sample_ids, on=PROBE_ID_COL, how="left"
     ).with_columns(
         is_in_sample=pl.col("is_in_sample_marker").fill_null(False)
     ).drop("is_in_sample_marker")
 
- 
-    # Calculate totals 
+
     total_sample_size = background_df.filter(pl.col("is_in_sample")).height
+    total_background_only_size = background_df.height - total_sample_size
+    
     if total_sample_size == 0:
         print("Warning: No probes from the sample were found in the background set.", file=sys.stderr)
         return pl.DataFrame()
-    total_background_only_size = background_df.height - total_sample_size
-    
-    # Generate Aggregation Expressions, now we are defining how each trait WILL BE CHECKED
-    # So now we are not evauating shit, just telling polars how to do de calculations next
-    aggs = []
-    for row in lookup_df.iter_rows(named=True):
-        trait_name, bit_pos = row['trait'], row['index']
-        chunk_id = bit_pos // BITS_PER_CHUNK
-        bitmask_to_check = 1 << (bit_pos % BITS_PER_CHUNK)
-        col_to_check = f"bitset_{chunk_id}"
-        has_trait_expr = (pl.col(col_to_check) & bitmask_to_check) > 0
-        aggs.append(has_trait_expr.sum().alias(trait_name))
 
-    # Execute all the queries at once
-    counts_wide_df = background_df.group_by("is_in_sample", maintain_order=True).agg(aggs)
+    contingency_table_df = background_df.group_by("is_in_sample").agg(
+        [pl.col(col).sum().alias(col) for col in background_df.columns if col != PROBE_ID_COL and col != "is_in_sample"]
+    ).unpivot(index="is_in_sample", variable_name="Trait", value_name="count"
+    ).pivot(index="Trait", on="is_in_sample", values="count").rename(
+        {"true": "a", "false": "c"}
+    ).fill_null(0)
     
-    # Reshape, Pivot, and create the contingency table for a and c
-    contingency_table_df = counts_wide_df.unpivot(
-        index="is_in_sample", variable_name="Trait", value_name="count"
-    ).pivot(
-        index="Trait", on="is_in_sample", values="count"
-    ).rename({"true": "a", "false": "c"})
-
-    # Calculate b and d, and filter out traits with no members
+    
+    results_df = contingency_table_df.filter(
+        (pl.col("a") + pl.col("c")) > 0
+    ).with_columns(
+        b=pl.lit(total_sample_size) - pl.col("a"),
+        d=pl.lit(total_background_only_size) - pl.col("c")
+    )
+    
     results_df = contingency_table_df.filter(
         (pl.col("a") + pl.col("c")) > 0
     ).with_columns(
@@ -149,6 +135,7 @@ def perform_enrichment(background_bitset_df: pl.DataFrame, sample_probes_df: pl.
     
     )
 
+    print("Final DataFrame after Fisher's test:")
     return final_df
 
 def apply_correction(results_df: pl.DataFrame, method: str, p_value_threshold: float) -> pl.DataFrame:
@@ -206,6 +193,8 @@ def get_background_df(background_name: str, user_dir: Path):
         print("Processing custom background...", file=sys.stderr)
         # The user's custom background file was saved in their session directory
         user_background_file = user_dir / USER_CUSTOM_BACKGROUND_NAME
+        print(f'needs to be fixed', file=sys.stderr)
+        sys.exit(1)
         return custom_background(user_background_file)
     
     # Find a file in BACKGROUND_DIR that starts with args.background_name
@@ -219,16 +208,7 @@ def get_background_df(background_name: str, user_dir: Path):
     # Read with the right types
     file_path = matching_files[0]
 
-    header = pl.scan_csv(file_path, separator='\t', n_rows=0).collect_schema().names()
-
-    schema_overrides = {col: pl.UInt64 if col.startswith('bitset_') else pl.String for col in header} 
-    df = pl.read_csv(
-        file_path,
-        separator='\t',
-        null_values="NA",
-        schema_overrides=schema_overrides
-    )
-    return df
+    return pl.read_parquet(file_path)
 
 
 def main():
