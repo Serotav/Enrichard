@@ -76,6 +76,10 @@ def annotate(rdata_file_path: Path, background_file_path: Path, output_file: Pat
     return final_df
 
 def cache_annotated_df(annotated_df: pl.DataFrame, cached_file: Path) -> None:
+    # Unpivoting to one trait per row, summing how many probes are associated with each trait.
+    # Trait      | totals
+    # Trait1     | 69
+    # Trait2     | 420
     contingency_table_df = annotated_df.select(
         [pl.col(col).sum().alias(col)for col in annotated_df.columns if col != PROBE_ID_COL]
     ).unpivot(index=[], variable_name="Trait", value_name="totals")

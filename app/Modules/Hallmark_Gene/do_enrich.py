@@ -9,7 +9,7 @@ from statsmodels.stats.multitest import multipletests
 
 APP_DIR = pathlib.Path(__file__).parent
 BACKGROUND_DIR  = APP_DIR/"background"
-MERGE_PATH = BACKGROUND_DIR / "merge.tsv" 
+MERGE_PATH = BACKGROUND_DIR / "merge.parquet" 
 PROBE_ID_COL = "Probe_ID"
 
 USER_CUSTOM_BACKGROUND_NAME = os.getenv("USER_CUSTOM_BACKGROUND_NAME")
@@ -18,48 +18,6 @@ OUTPUT_FILE_NAME = str(APP_DIR.name) + ".tsv"
 
 BITS_PER_CHUNK = 64
 
-def merge_background():
-    
-    source_files = [
-        file_path for file_path in BACKGROUND_DIR.glob("*.tsv")
-        if file_path.name != MERGE_PATH.name # Exclude the merge file itself, WE SHOULD NOT BE HERE IF IT EXISTS
-    ]
-
-    if not source_files:
-        print(f"No TSV files to merge in {BACKGROUND_DIR} directory.", file=sys.stderr)
-        return pl.DataFrame() # Return empty DataFrame if no files
-
-    # ALWAYS READ WITH THE RIGHT TYPES OR INT64 INSTREAD OF UINT64 WILL CRASH US  
-    first_file_path = source_files[0]
-    header = pl.scan_csv(first_file_path, separator='\t', n_rows=0).collect_schema().names()
-    
-    schema_overrides = {col: pl.UInt64 for col in header if col.startswith("bitset_")}
-
-    lazy_frames = [
-        pl.scan_csv(file_path, separator='\t', schema_overrides=schema_overrides)
-        for file_path in source_files
-    ]
-
-    #  Concatenate all lazy frames, drop duplicates, and then collect the result.
-    merged_df = pl.concat(lazy_frames).unique(subset=[PROBE_ID_COL], keep='first').collect()
-
-    merged_df.write_csv(MERGE_PATH, separator='\t')
-    return merged_df
-
-def custom_background(user_background_file: Path) -> pl.DataFrame:
-    if not MERGE_PATH.exists():
-        merge_df = merge_background()
-    else: 
-        header = pl.scan_csv(MERGE_PATH, separator='\t', n_rows=0).collect_schema().names()
-        
-        # ALWAYS READ WITH THE RIGHT TYPES OR INT64 INSTREAD OF UINT64 WILL CRASH US  
-        schema_overrides = { col: pl.UInt64 for col in header if col.startswith("bitset_")}
-        merge_df = pl.read_csv(MERGE_PATH, separator='\t', schema_overrides=schema_overrides)
-    
-    user_probes_df = pl.read_csv(user_background_file, has_header=False).rename({"column_1": PROBE_ID_COL})
-    custom_annotated_df = merge_df.join(user_probes_df, on=PROBE_ID_COL, how="inner")
-    
-    return custom_annotated_df
 
 def perform_enrichment_from_cache(cache_df: pl.DataFrame,background_df: pl.DataFrame, sample_probes_df: pl.DataFrame) -> pl.DataFrame:
     """
@@ -120,7 +78,6 @@ def perform_enrichment_from_cache(cache_df: pl.DataFrame,background_df: pl.DataF
     )
 
     return final_df
-
 
 def perform_enrichment(background_df: pl.DataFrame, sample_probes_df: pl.DataFrame) -> pl.DataFrame:
     """
@@ -247,13 +204,45 @@ def apply_correction(results_df: pl.DataFrame, method: str, p_value_threshold: f
     
     return significant_results.sort("P-adj")
 
+def merge_background():
+    
+    source_files = [
+        file_path for file_path in BACKGROUND_DIR.glob("*.parquet")
+        if file_path.name != MERGE_PATH.name # Exclude the merge file itself, WE SHOULD NOT BE HERE IF IT EXISTS
+    ]
+
+    if not source_files:
+        print(f"No files to merge in {BACKGROUND_DIR} directory.", file=sys.stderr)
+        return pl.DataFrame() # Return empty DataFrame if no files
+
+    lazy_frames = [
+        pl.scan_parquet(file_path)
+        for file_path in source_files
+    ]
+
+    #  Concatenate all lazy frames, drop duplicates, and then collect the result.
+    merged_df = pl.concat(lazy_frames).unique(subset=[PROBE_ID_COL], keep='first').collect()
+
+    merged_df.write_parquet(MERGE_PATH)
+    return merged_df
+
+def custom_background(user_background_file: Path) -> pl.DataFrame:
+    if not MERGE_PATH.exists():
+        merge_df = merge_background()
+    else: 
+        merge_df = pl.read_parquet(MERGE_PATH)
+    
+    user_probes_df = pl.read_csv(user_background_file, has_header=False).rename({"column_1": PROBE_ID_COL})
+    
+    custom_annotated_df = merge_df.join(user_probes_df, on=PROBE_ID_COL, how="inner")
+    
+    return custom_annotated_df
+
 def get_background_df(background_name: str, user_dir: Path) -> pl.DataFrame:
     if background_name == USER_CUSTOM_BACKGROUND_NAME:
         print("Processing custom background...", file=sys.stderr)
         # The user's custom background file was saved in their session directory
         user_background_file = user_dir / USER_CUSTOM_BACKGROUND_NAME
-        print(f'needs to be fixed', file=sys.stderr)
-        sys.exit(1)
         return custom_background(user_background_file)
     
     # Find a file in BACKGROUND_DIR that starts with args.background_name
@@ -295,7 +284,7 @@ def main()-> None:
     if args.background_name== USER_CUSTOM_BACKGROUND_NAME:
         raw_results_df = perform_enrichment(background_df, sample_df)
     else:
-        cache_path = list(Path(args.cache_folder).glob(f"{args.background_name}*"))
+        cache_path = list(Path(args.cache_folder).glob(f"{args.background_name}.*"))
         if not cache_path or len(cache_path) > 1:
             print(f"Error: No cache file found for background '{args.background_name}' or multiple found [{len(cache_path)}].", file=sys.stderr)
             sys.exit(1)
