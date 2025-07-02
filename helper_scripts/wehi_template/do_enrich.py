@@ -120,13 +120,6 @@ def perform_enrichment(background_df: pl.DataFrame, sample_probes_df: pl.DataFra
         d=pl.lit(total_background_only_size) - pl.col("c")
     )
     
-    results_df = contingency_table_df.filter(
-        (pl.col("a") + pl.col("c")) > 0
-    ).with_columns(
-        b=pl.lit(total_sample_size) - pl.col("a"),
-        d=pl.lit(total_background_only_size) - pl.col("c")
-    )
-    
     if results_df.is_empty():
         return pl.DataFrame()
 
