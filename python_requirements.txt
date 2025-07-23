@@ -6,3 +6,4 @@ rds2py
 streamlit
 altair
 statsmodels
+pyranges

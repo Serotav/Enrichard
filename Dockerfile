@@ -35,10 +35,10 @@ RUN apt-get update && \
 
 
 # ---  Packages ---
-COPY python_requirements.txt .
-RUN pip3 install --break-system-packages --no-cache-dir -r python_requirements.txt 
 COPY install_r_packages.r .
 RUN Rscript install_r_packages.r
+COPY python_requirements.txt .
+RUN pip3 install --break-system-packages --no-cache-dir -r python_requirements.txt 
 
 
 # Security in a world where no one cares tho

@@ -7,6 +7,54 @@ import pathlib
 
 from .config import *
 
+def display_altair_heatmap(file_path: pathlib.Path):
+    """
+    Reads a TSV file and displays it as an Altair heatmap with a dynamic color scale.
+    """
+    try:
+        df = pl.read_csv(file_path, separator='\t')
+        
+        # Altair requires data in long format, so we melt the dataframe
+        long_df = df.melt(
+            id_vars=df.columns[0], 
+            variable_name="State", 
+            value_name="Odds-Ratio"
+        ).rename({df.columns[0]: "Cell_Type"})
+
+        # Determine the dynamic range for the color scale
+        min_or = long_df["Odds-Ratio"].min()
+        max_or = long_df["Odds-Ratio"].max()
+
+        # Create a robust diverging domain centered at 1.0
+        color_domain = [min_or, 1.0, max_or]
+        if min_or == 1.0 and max_or == 1.0:
+            color_domain = [0.9, 1.0, 1.1] # Handle edge case where all values are 1.0
+
+        # Get the order of states for proper sorting on the x-axis
+        state_order = df.columns[1:]
+
+        heatmap = alt.Chart(long_df).mark_rect().encode(
+            x=alt.X('State:N', sort=state_order, title="Chromatin State"),
+            y=alt.Y('Cell_Type:N', title="Cell Type"),
+            color=alt.Color('Odds-Ratio:Q',
+                scale=alt.Scale(scheme='redblue', domain=color_domain, reverse=True),
+                legend=alt.Legend(title="Odds Ratio")
+            ),
+            tooltip=[
+                alt.Tooltip('Cell_Type:N', title="Cell Type"),
+                alt.Tooltip('State:N', title="State"),
+                alt.Tooltip('Odds-Ratio:Q', title="Odds Ratio", format=".3f")
+            ]
+        ).properties(
+            title="Chromatin State Enrichment Heatmap"
+        ).interactive()
+
+        st.altair_chart(heatmap, use_container_width=True)
+
+    except Exception as e:
+        st.error(f"Failed to create heatmap: {e}")
+
+
 def create_dot_plot(df: pd.DataFrame)->None:
     """
     Creates an Altair dot plot for enrichment analysis results.
@@ -125,6 +173,15 @@ def display_single_module_results(module_name: str, file_path: pathlib.Path) -> 
     """
     st.markdown(f"#### Module: `{module_name}`")
     try:
+        # Check if the file is a heatmap
+        if "_HEATMAP" in file_path.name:
+            st.subheader("Visualization")
+            display_altair_heatmap(file_path)
+            with st.expander("Show Full Data Table"):
+                df = pl.read_csv(file_path, separator='\t').to_pandas()
+                st.dataframe(df)
+            return True
+
         df = pl.read_csv(file_path, separator='\t').to_pandas()
         if df.empty:
             st.info("This module produced no significant results.")
@@ -208,7 +265,30 @@ def display_comparison_results(comparison_dir: pathlib.Path)->None:
             st.markdown(f"#### Module: `{module_name}`")
             
             try:
-                # Load the merged (common) results
+                # Handle heatmap files differently
+                if "_HEATMAP" in file_path.name:
+                    st.subheader("Heatmap Comparison")
+                    st.info("Heatmap comparison view is not yet implemented. Showing individual heatmaps.")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown("##### Sample A")
+                        original_file_a = dir_a / module_name / file_path.name
+                        if original_file_a.exists():
+                            display_altair_heatmap(original_file_a)
+                        else:
+                            st.warning("Result file for Sample A not found.")
+                    
+                    with col2:
+                        st.markdown("##### Sample B")
+                        original_file_b = dir_b / module_name / file_path.name
+                        if original_file_b.exists():
+                            display_altair_heatmap(original_file_b)
+                        else:
+                            st.warning("Result file for Sample B not found.")
+                    continue
+
+                # Load the merged (common) results for standard dot plots
                 merged_df = pl.read_csv(file_path, separator='\t').to_pandas()
                 
                 if merged_df.empty:

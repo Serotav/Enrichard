@@ -1,6 +1,7 @@
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 MODULES_DIR="$SCRIPT_DIR/../app/Modules"
 WEHI_TEMPLATE="$SCRIPT_DIR/wehi_template"
+CHROMATINE_TEMPLATE="$SCRIPT_DIR/chromatine_template"
 COMMON_BACKGROUND="$SCRIPT_DIR/../app/Common_Background"
 
 wehi_sets=(
@@ -43,4 +44,7 @@ for item in "${wehi_sets[@]}"; do
         break
     fi
 done
+
+# Chormatine
+cp -r $CHROMATINE_TEMPLATE "$MODULES_DIR/Chromatine"
 
