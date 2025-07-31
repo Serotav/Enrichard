@@ -1,8 +1,10 @@
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 MODULES_DIR="$SCRIPT_DIR/../app/Modules"
 WEHI_TEMPLATE="$SCRIPT_DIR/wehi_template"
-CHROMATINE_TEMPLATE="$SCRIPT_DIR/chromatine_template"
 COMMON_BACKGROUND="$SCRIPT_DIR/../app/Common_Background"
+
+CHROMATINE_TEMPLATE="$SCRIPT_DIR/chromatine_template"
+HISTONE_TEMPLATE="$SCRIPT_DIR/histone_template"
 
 wehi_sets=(
 "Hallmark_Gene,https://bioinf.wehi.edu.au/MSigDB/v7.1/Hs.h.all.v7.1.entrez.rds" 
@@ -48,3 +50,5 @@ done
 # Chormatine
 cp -r $CHROMATINE_TEMPLATE "$MODULES_DIR/Chromatine"
 
+# Histones
+cp -r $HISTONE_TEMPLATE "$MODULES_DIR/Histone"
