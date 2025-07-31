@@ -1,4 +1,5 @@
 #!/bin/bash
+# https://egg2.wustl.edu/roadmap/data/byFileType/chromhmmSegmentations/ChmmModels/coreMarks/jointModel/final/all_hg38lift.mnemonics.bedFiles.tgz
 set -e
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
 
