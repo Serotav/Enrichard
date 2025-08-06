@@ -2,6 +2,8 @@ import streamlit as st
 import subprocess
 import pathlib
 import polars as pl
+import time
+import shutil
 
 from .config import *
 
@@ -22,10 +24,7 @@ def run_enrichment_pipeline(user_dir: pathlib.Path, outputfoler:pathlib.Path, ba
 
     with st.expander("Show Pipeline Execution Log"):
         st.code(
-            f"Command: {' '.join(command)}\n"
-            f"Return Code: {process.returncode}\n\n"
-            f"--- STDOUT ---\n{process.stdout}\n\n"
-            f"--- STDERR ---\n{process.stderr}",
+            f"""Command: {' '.join(command)}\nReturn Code: {process.returncode}\n\n--- STDOUT ---\n{process.stdout}\n\n--- STDERR ---\n{process.stderr}""",
             language='log'
         )
 
@@ -81,15 +80,13 @@ def run_enrichment_pipeline_2samples( user_dir: pathlib.Path, background: str, p
     # Display Logs (logic is now outside the spinner) ---
     with st.expander("Show Pipeline Execution Log for Sample A"):
         st.code(
-            f"Command: {' '.join(command_a)}\nReturn Code: {returncode_a}\n\n"
-            f"--- STDOUT ---\n{stdout_a}\n\n--- STDERR ---\n{stderr_a}",
+            f"""Command: {' '.join(command_a)}\nReturn Code: {returncode_a}\n\n--- STDOUT ---\n{stdout_a}\n\n--- STDERR ---\n{stderr_a}""",
             language='log'
         )
     
     with st.expander("Show Pipeline Execution Log for Sample B"):
         st.code(
-            f"Command: {' '.join(command_b)}\nReturn Code: {returncode_b}\n\n"
-            f"--- STDOUT ---\n{stdout_b}\n\n--- STDERR ---\n{stderr_b}",
+            f"""Command: {' '.join(command_b)}\nReturn Code: {returncode_b}\n\n--- STDOUT ---\n{stdout_b}\n\n--- STDERR ---\n{stderr_b}""",
             language='log'
         )
 
@@ -99,6 +96,70 @@ def run_enrichment_pipeline_2samples( user_dir: pathlib.Path, background: str, p
         st.stop()
     else:
         st.success("Both pipelines completed successfully in parallel!")
+
+def run_enrichment_pipeline_multi_sample(
+    real_samples_dir: pathlib.Path, 
+    control_samples_dir: pathlib.Path, 
+    background: str, 
+    p_value: float, 
+    correction_method: str
+) -> None:
+    """
+    Executes the enrichment pipeline for multiple real and control samples in parallel.
+    """
+    commands = []
+    
+    # Prepare commands for real samples
+    for sample_path in real_samples_dir.iterdir():
+        if not sample_path.is_dir(): continue
+        output_dir = sample_path / USER_MODULE_OUTPUT
+        output_dir.mkdir(parents=True, exist_ok=True)
+        cmd = ['bash', str(MASTER_SCRIPT_PATH), str(sample_path), str(output_dir), str(background), str(p_value), str(correction_method)]
+        commands.append({'cmd': cmd, 'name': f"Real: {sample_path.name}", 'log_expander': None})
+
+    # Prepare commands for control samples
+    for sample_path in control_samples_dir.iterdir():
+        if not sample_path.is_dir(): continue
+        output_dir = sample_path / USER_MODULE_OUTPUT
+        output_dir.mkdir(parents=True, exist_ok=True)
+        cmd = ['bash', str(MASTER_SCRIPT_PATH), str(sample_path), str(output_dir), str(background), str(p_value), str(correction_method)]
+        commands.append({'cmd': cmd, 'name': f"Control: {sample_path.name}", 'log_expander': None})
+
+    st.markdown("---")
+    st.info(f"Starting parallel analysis for {len(commands)} samples...")
+
+    # Create expanders for logs first
+    for item in commands:
+        item['log_expander'] = st.expander(f"Show Pipeline Log for {item['name']}", expanded=False)
+
+    with st.spinner(f"Running enrichment for {len(commands)} samples in parallel. This may take a while..."):
+        processes = [(item, subprocess.Popen(item['cmd'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)) for item in commands]
+        
+        # Wait for all processes to complete
+        for item, process in processes:
+            stdout, stderr = process.communicate()
+            item['stdout'] = stdout
+            item['stderr'] = stderr
+            item['returncode'] = process.returncode
+
+    st.success("All parallel pipelines completed!")
+
+    # Display logs and check for errors
+    any_errors = False
+    for item in commands:
+        with item['log_expander']:
+            st.code(
+                f"""Command: {' '.join(item['cmd'])}\nReturn Code: {item['returncode']}\n\n--- STDOUT ---\n{item['stdout']}\n\n--- STDERR ---\n{item['stderr']}""",
+                language='log'
+            )
+        if item['returncode'] != 0:
+            any_errors = True
+            st.error(f"Pipeline for {item['name']} failed. Check log above.")
+
+    if any_errors:
+        st.error("One or more pipeline executions failed. Please check the logs above for details.")
+        st.stop()
+
 
 def process_and_merge_comparison_results(output_base_dir: pathlib.Path) -> pathlib.Path:
     """
@@ -152,3 +213,57 @@ def process_and_merge_comparison_results(output_base_dir: pathlib.Path) -> pathl
     
     st.success("Comparison processing complete!")
     return comparison_dir
+
+def group_data_per_module(
+    real_samples_dir: pathlib.Path,
+    control_samples_dir: pathlib.Path,
+    multi_sample_results_dir: pathlib.Path,
+) -> None:
+    """
+    Organizes results into a modular structure for group analysis.
+    """
+    st.markdown("---")
+    st.info("Organizing results for group analysis...")
+
+    # 1. Determine which modules were run
+    try:
+        first_sample_output = next(real_samples_dir.iterdir()) / USER_MODULE_OUTPUT
+        module_names = [d.name for d in first_sample_output.iterdir() if d.is_dir()]
+    except StopIteration:
+        st.warning("No sample results found. Cannot proceed with group analysis.")
+        return
+
+    with st.spinner("Copying result files for group analysis..."):
+        for module_name in module_names:
+            # 2. Define paths for this module
+            module_analysis_dir = multi_sample_results_dir / module_name
+            module_real_results_dir = module_analysis_dir / "real_results"
+            module_control_results_dir = module_analysis_dir / "control_results"
+            
+            module_analysis_dir.mkdir(parents=True, exist_ok=True)
+            module_real_results_dir.mkdir(exist_ok=True)
+            module_control_results_dir.mkdir(exist_ok=True)
+
+            # 3. Gather and copy result files
+            _gather_results_for_module(real_samples_dir, module_name, module_real_results_dir)
+            _gather_results_for_module(control_samples_dir, module_name, module_control_results_dir)
+
+    # We don't need those 2 folders anymore
+    shutil.rmtree(real_samples_dir)
+    shutil.rmtree(control_samples_dir)
+    st.success("Successfully organized result files.")
+
+def _gather_results_for_module(source_dir: pathlib.Path, module_name: str, target_dir: pathlib.Path):
+    """
+    Copies all result files for a specific module from the source sample directories to the target directory.
+    """
+    for sample_dir in source_dir.iterdir():
+        if not sample_dir.is_dir(): continue
+        
+        # Path to the module's output directory for a single sample
+        module_output_dir = sample_dir / USER_MODULE_OUTPUT / module_name
+        
+        if module_output_dir.exists():
+            # Copy all .tsv files (handles both single file and heatmaps)
+            for result_file in module_output_dir.glob('*.tsv'):
+                shutil.copy(result_file, target_dir / f"{sample_dir.name}_{result_file.name}")

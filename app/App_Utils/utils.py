@@ -2,6 +2,9 @@ import streamlit as st
 import uuid
 import shutil
 import pathlib
+import zipfile
+import random
+import polars as pl
 
 from .config import *
 
@@ -42,7 +45,7 @@ def get_example_files() -> dict:
     Returns a dictionary mapping a display name to its file path.
     """
     if not TEST_SAMPLES_DIR.is_dir():
-        return {} 
+        return {}
     
     example_files = {
         file_path.stem: file_path 
@@ -67,3 +70,112 @@ def copy_example_file(source_path: pathlib.Path, destination_path: pathlib.Path)
         st.error(f"Failed to copy example file '{source_path.name}': {e}")
         st.stop()
 
+def handle_zip_extraction(zip_file, extract_to_dir: pathlib.Path) -> None:
+    """Extracts a zip file to a specified directory."""
+    try:
+        with zipfile.ZipFile(zip_file, 'r') as zip_ref:
+            zip_ref.extractall(extract_to_dir)
+        st.info(f"Successfully extracted files to {extract_to_dir}")
+    except zipfile.BadZipFile:
+        st.error("The uploaded file is not a valid zip archive.")
+        st.stop()
+    except Exception as e:
+        st.error(f"Failed to extract zip file: {e}")
+        st.stop()
+
+def organize_extracted_samples(source_dir: pathlib.Path) -> None:
+    """
+    Recursively finds all sample files, moves them to a structured top-level directory,
+    and renames them to the standard 'sample.txt' name.
+    """
+    st.info("Organizing extracted files into a standard structure...")
+    
+    # Find all files, excluding system files like .DS_Store
+    all_files = [p for p in source_dir.rglob('*') if p.is_file() and not p.name.startswith('.')]
+    
+    if not all_files:
+        st.warning("No sample files found in the extracted archive.")
+        st.stop()
+
+    for old_path in all_files:
+        # Create a new directory named after the original file stem
+        new_sample_dir = source_dir / old_path.stem
+        new_sample_dir.mkdir(exist_ok=True)
+        
+        # Define the new path for the sample file
+        new_path = new_sample_dir / USER_SAMPLE_NAME
+        
+        # Move and rename the file
+        shutil.move(str(old_path), str(new_path))
+
+    # Clean up any empty directories left behind after moving files
+    for path in source_dir.iterdir():
+        if path.is_dir() and not any(path.iterdir()):
+            shutil.rmtree(path)
+            
+    st.success("File organization complete.")
+
+
+import polars as pl
+
+def create_control_samples(real_samples_dir: pathlib.Path, background_path: pathlib.Path, control_samples_dir: pathlib.Path) -> None:
+    """
+    Generates a control sample for each real sample by random sampling from the background's 'Probe_ID' column.
+    Assumes real_samples_dir contains one directory per sample.
+    """
+    try:
+        control_samples_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Use Polars to read the TSV and get the 'Probe_ID' column
+        background_df = pl.read_csv(background_path, separator='\t', null_values='NA')
+        if "Probe_ID" not in background_df.columns:
+            st.error(f"The background file '{background_path.name}' must contain a 'Probe_ID' column.")
+            st.stop()
+        
+        background_probes = background_df["Probe_ID"].to_list()
+
+        if not background_probes:
+            st.error("Background file does not contain any probes in the 'Probe_ID' column.")
+            st.stop()
+
+        # Iterate through the structured directories in real_samples_dir
+        real_sample_dirs = [d for d in real_samples_dir.iterdir() if d.is_dir()]
+
+        with st.spinner(f"Generating control samples for {len(real_sample_dirs)} real samples..."):
+            for sample_dir in real_sample_dirs:
+                real_sample_file = sample_dir / USER_SAMPLE_NAME
+                if not real_sample_file.exists():
+                    continue
+
+                with open(real_sample_file, 'r') as f:
+                    num_probes = sum(1 for line in f if line.strip())
+                
+                # Ensure we don't request more probes than available
+                if num_probes > len(background_probes):
+                    st.error(f"Sample '{sample_dir.name}' contains more probes ({num_probes}) than the background ({len(background_probes)}). Cannot create control.")
+                    st.stop()
+
+                control_probes = random.sample(background_probes, k=num_probes)
+                
+                # Create a corresponding directory structure for the control sample
+                control_sample_dir = control_samples_dir / sample_dir.name
+                control_sample_dir.mkdir(exist_ok=True)
+                
+                control_file_path = control_sample_dir / USER_SAMPLE_NAME
+                with open(control_file_path, 'w') as f:
+                    f.write('\n'.join(control_probes))
+        
+        st.success("Control samples generated successfully.")
+
+    except FileNotFoundError:
+        st.error(f"Background file not found at: {background_path}")
+        st.stop()
+    except pl.exceptions.NoDataError:
+        st.error(f"The background file '{background_path.name}' appears to be empty.")
+        st.stop()
+    except ValueError as e:
+        st.error(f"Error during random sampling: {e}.")
+        st.stop()
+    except Exception as e:
+        st.error(f"An unexpected error occurred while creating control samples: {e}")
+        st.stop()
