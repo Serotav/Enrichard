@@ -21,7 +21,7 @@ def main():
 
     analysis_type = st.radio(
         "Select Analysis Type",
-        ("Single Sample Enrichment", "Two Sample Comparison"),
+        ("Single Sample Enrichment", "Two Sample Comparison", "Multi-Sample Group Comparison"),
         horizontal=True,
         label_visibility="collapsed"
     )
@@ -29,6 +29,7 @@ def main():
     # Initialize variables for sample sources
     sample_source_1 = None
     sample_source_2 = None
+    sample_source_multi = None
     
     # Section for Single Sample Analysis
     if analysis_type == "Single Sample Enrichment":
@@ -83,9 +84,18 @@ def main():
             if uploaded_file_B:
                 sample_source_2 = uploaded_file_B
 
+    elif analysis_type == "Multi-Sample Group Comparison":
+        st.header("Multi-Sample Group Input")
+        st.markdown("Upload a `.zip` file containing multiple sample files (one ID per line in each file).")
+        uploaded_zip_file = st.file_uploader(
+            "Upload your zip archive of CpG site lists", type=['zip'], key="multi_uploader"
+        )
+        if uploaded_zip_file:
+            sample_source_multi = uploaded_zip_file
+
     # This part of the logic runs if at least one sample is provided 
     # The condition will need to be updated when we add the comparison logic
-    if sample_source_1: # For now, we only proceed if the first sample is there
+    if sample_source_1 or sample_source_multi: # For now, we only proceed if the first sample is there
         
         # Configure Analysis Parameters (This section remains mostly the same) 
         st.header("Configure Analysis Parameters")
@@ -114,6 +124,7 @@ def main():
         run_button_disabled = (
             (analysis_type == "Single Sample Enrichment" and sample_source_1 is None) or
             (analysis_type == "Two Sample Comparison" and (sample_source_1 is None or sample_source_2 is None)) or
+            (analysis_type == "Multi-Sample Group Comparison" and sample_source_multi is None) or
             (selected_background_name == 'custom' and custom_background_file is None)
         )
 
@@ -174,6 +185,53 @@ def main():
                 st.header("Comparative Analysis")
                 comparison_results_dir = process_and_merge_comparison_results(user_dir)
                 display_comparison_results(comparison_results_dir)
+            
+            elif analysis_type == "Multi-Sample Group Comparison":
+                # Define directories for real, control, and results
+                real_samples_dir = user_dir / "real_samples"
+                control_samples_dir = user_dir / "control_samples"
+                multi_sample_results_dir = user_dir / "multi_sample_results"
+                
+                real_samples_dir.mkdir(parents=True, exist_ok=True)
+                control_samples_dir.mkdir(parents=True, exist_ok=True)
+                multi_sample_results_dir.mkdir(parents=True, exist_ok=True)
+
+                # Unzip user-provided samples 
+                st.info("Extracting samples from the zip archive...")
+                handle_zip_extraction(sample_source_multi, real_samples_dir)
+                organize_extracted_samples(real_samples_dir)
+
+                # Generate control samples
+                st.info("Generating control samples for comparison...")
+                # Determine the full background path
+                background_file_name = next((f.name for f in COMMON_BACKGROUND_ROOT.glob(f'{background}.*')), None)
+                if background == "custom":
+                    background_path = user_dir / USER_CUSTOM_BACKGROUND_NAME
+                else:
+                    background_path = COMMON_BACKGROUND_ROOT / background_file_name
+
+                if not background_path.exists():
+                    st.error(f"Could not find the specified background file: {background_path}")
+                    st.stop()
+                
+                create_control_samples(real_samples_dir, background_path, control_samples_dir)
+
+                # Run the parallel pipeline 
+                run_enrichment_pipeline_multi_sample(
+                    real_samples_dir=real_samples_dir,
+                    control_samples_dir=control_samples_dir,
+                    background=background,
+                    p_value=p_value_threshold,
+                    correction_method=selected_correction_method
+                )
+
+                # Orchestrate the final modular analysis
+                group_data_per_module(
+                    real_samples_dir=real_samples_dir,
+                    control_samples_dir=control_samples_dir,
+                    multi_sample_results_dir=multi_sample_results_dir,
+                )
+
 
             
     else:
