@@ -92,6 +92,13 @@ def main():
         )
         if uploaded_zip_file:
             sample_source_multi = uploaded_zip_file
+        
+        group_comparison_method = st.selectbox(
+            "Select Group Comparison Method",
+            options=["fisher", "ttest"],
+            index=1,  # Default to 'fisher'
+            help="Choose the statistical method for comparing the real vs. control groups. 'fisher' compares enrichment frequency (recommended), while 'ttest' compares the average Odds Ratios."
+        )
 
     # This part of the logic runs if at least one sample is provided 
     # The condition will need to be updated when we add the comparison logic
@@ -225,12 +232,22 @@ def main():
                     correction_method=selected_correction_method
                 )
 
-                # Orchestrate the final modular analysis
+                # Set up the folder structure
                 group_data_per_module(
                     real_samples_dir=real_samples_dir,
                     control_samples_dir=control_samples_dir,
                     multi_sample_results_dir=multi_sample_results_dir,
                 )
+
+                # Run the final analysis in parallel
+                run_modular_analysis_parallel(
+                    multi_sample_results_dir=multi_sample_results_dir,
+                    modules_dir=APP_DIR / "Modules",
+                    method=group_comparison_method
+                )
+
+                # Display the final results
+                #display_multi_sample_results(multi_sample_results_dir)
 
 
             

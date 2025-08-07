@@ -267,3 +267,62 @@ def _gather_results_for_module(source_dir: pathlib.Path, module_name: str, targe
             # Copy all .tsv files (handles both single file and heatmaps)
             for result_file in module_output_dir.glob('*.tsv'):
                 shutil.copy(result_file, target_dir / f"{sample_dir.name}_{result_file.name}")
+
+def run_modular_analysis_parallel(
+    multi_sample_results_dir: pathlib.Path,
+    modules_dir: pathlib.Path,
+    method: str
+) -> None:
+    """
+    Finds and executes the 'multisample.sh' script for each module in parallel.
+    """
+    st.markdown("---")
+    st.info("Running final group analysis for each module in parallel...")
+
+    commands = []
+    module_dirs = [d for d in multi_sample_results_dir.iterdir() if d.is_dir()]
+
+    for module_analysis_dir in module_dirs:
+        module_name = module_analysis_dir.name
+        analysis_script_path = modules_dir / module_name / "multisample.sh"
+        
+        if analysis_script_path.exists():
+            command = ["bash", str(analysis_script_path), str(module_analysis_dir), method]
+            commands.append({'cmd': command, 'name': module_name, 'log_expander': None})
+        else:
+            st.warning(f"Analysis script `multisample.sh` not found for module '{module_name}'. Skipping.")
+
+    if not commands:
+        st.warning("No analysis scripts found for any module.")
+        return
+
+    # Create expanders for logs first
+    for item in commands:
+        item['log_expander'] = st.expander(f"Show Group Analysis Log for {item['name']}", expanded=False)
+
+    with st.spinner(f"Running group analysis for {len(commands)} modules..."):
+        processes = [(item, subprocess.Popen(item['cmd'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)) for item in commands]
+        
+        for item, process in processes:
+            stdout, stderr = process.communicate()
+            item['stdout'] = stdout
+            item['stderr'] = stderr
+            item['returncode'] = process.returncode
+
+    st.success("All group analyses completed!")
+
+    # Display logs and check for errors
+    any_errors = False
+    for item in commands:
+        with item['log_expander']:
+            st.code(
+                f"""Command: {' '.join(item['cmd'])}\nReturn Code: {item['returncode']}\n\n--- STDOUT ---\n{item['stdout']}\n\n--- STDERR ---\n{item['stderr']}""",
+                language='log'
+            )
+        if item['returncode'] != 0:
+            any_errors = True
+            st.error(f"Group analysis for module '{item['name']}' failed. Check log above.")
+
+    if any_errors:
+        st.error("One or more group analyses failed.")
+        st.stop()

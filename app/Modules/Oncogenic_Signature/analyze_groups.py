@@ -1,0 +1,194 @@
+#!/usr/bin/env python3
+
+import argparse
+import pathlib
+import polars as pl
+import numpy as np
+from scipy.stats import ttest_ind, fisher_exact
+
+def _aggregate_results(directory: pathlib.Path) -> pl.DataFrame:
+    """
+    Finds and concatenates all result .tsv files in a given directory,
+    using the 'P-adj' column for p-values and calculating the Odds-Ratio.
+    """
+    all_dfs = []
+    required_cols = ["Trait", "a", "b", "c", "d", "P-adj"]
+
+    for file_path in directory.glob('*.tsv'):
+        try:
+            df = pl.read_csv(file_path, separator='\t', null_values="NA")
+
+            # Check if all required columns are present in the file.
+            if not all(col in df.columns for col in required_cols):
+                print(f"Warning: Skipping file {file_path} because it lacks required columns ({', '.join(required_cols)}).")
+                continue
+
+            # Enforce consistent data types for all columns to prevent schema errors.
+            df = df.with_columns(
+                pl.col("Trait").cast(pl.String),
+                pl.col("P-adj").cast(pl.Float64, strict=False), # strict=False turns parsing errors into nulls
+                pl.col(["a", "b", "c", "d"]).cast(pl.Int64)
+            ).rename({"P-adj": "P-value"})
+            
+            # Calculate the Odds-Ratio.
+            df_with_or = df.with_columns(
+                pl.struct(['a', 'b', 'c', 'd']).map_elements(
+                    lambda cols: ((cols['a'] + 0.5) * (cols['d'] + 0.5)) / ((cols['b'] + 0.5) * (cols['c'] + 0.5)),
+                    return_dtype=pl.Float64
+                ).alias("Odds-Ratio")
+            )
+            
+            # Select only the columns needed for the group-level analysis.
+            all_dfs.append(df_with_or.select(["Trait", "Odds-Ratio", "P-value"]))
+
+        except Exception as e:
+            print(f"An unexpected error occurred while processing {file_path}: {e}")
+            continue
+    
+    if not all_dfs:
+        return pl.DataFrame()
+        
+    # Concatenate all the processed DataFrames into one.
+    return pl.concat(all_dfs)
+
+def run_fisher_analysis(real_df: pl.DataFrame, control_df: pl.DataFrame, n_real_total: int, n_control_total: int, p_cutoff: float) -> list:
+    """
+    Performs group-level enrichment by comparing the frequency of significant traits.
+    """
+    print(f"Running group comparison using Fisher's Exact Test with a p-value cutoff of {p_cutoff}.")
+    all_traits = sorted(list(set(real_df['Trait'].to_list()) | set(control_df['Trait'].to_list())))
+    analysis_results = []
+
+    for trait in all_traits:
+        n_real_enriched = real_df.filter((pl.col('Trait') == trait) & (pl.col('P-value') < p_cutoff)).height
+        n_control_enriched = control_df.filter((pl.col('Trait') == trait) & (pl.col('P-value') < p_cutoff)).height
+
+        # Create the 2x2 contingency table for the Fisher's Exact Test
+        table = [
+            [n_real_enriched, n_real_total - n_real_enriched],
+            [n_control_enriched, n_control_total - n_control_enriched]
+        ]
+
+        # The test is only meaningful if there's at least one enriched sample
+        if n_real_enriched == 0 and n_control_enriched == 0:
+            continue
+
+        group_or, p_value = fisher_exact(table)
+
+        analysis_results.append({
+            "Trait": trait,
+            "P-value": p_value,
+            "Statistic": group_or,
+            "Statistic_Name": "Group_Odds_Ratio",
+            "Value_Real": n_real_enriched / n_real_total if n_real_total > 0 else 0,
+            "Value_Control": n_control_enriched / n_control_total if n_control_total > 0 else 0,
+            "N_Real": n_real_total,
+            "N_Control": n_control_total
+        })
+        
+    return analysis_results
+
+def run_ttest_analysis(real_df: pl.DataFrame, control_df: pl.DataFrame, n_real_total: int, n_control_total: int) -> list:
+    """
+    Performs group-level enrichment using a t-test on log(Odds-Ratios) with imputation.
+    """
+    print("Running group comparison using T-test with imputation.")
+    all_traits = sorted(list(set(real_df['Trait'].to_list()) | set(control_df['Trait'].to_list())))
+    analysis_results = []
+
+    for trait in all_traits:
+        real_ors = real_df.filter(pl.col('Trait') == trait)['Odds-Ratio'].to_list()
+        control_ors = control_df.filter(pl.col('Trait') == trait)['Odds-Ratio'].to_list()
+
+        # Impute OR=1.0 for samples where the trait was not found/enriched
+        real_ors.extend([1.0] * (n_real_total - len(real_ors)))
+        control_ors.extend([1.0] * (n_control_total - len(control_ors)))
+
+        # After imputation, check if we have enough data to perform a t-test
+        # This would only fail if there is <2 real or <2 control samples in total.
+        if len(real_ors) < 2 or len(control_ors) < 2:
+            continue
+
+        # Transform data (log(1.0) = 0)
+        log_real_ors = np.log(real_ors)
+        log_control_ors = np.log(control_ors)
+
+        # Perform Welch's t-test (assumes unequal variances)
+        stat, p_value = ttest_ind(log_real_ors, log_control_ors, equal_var=False, nan_policy='omit')
+        
+        analysis_results.append({
+            "Trait": trait,
+            "P-value": p_value,
+            "Statistic": stat,
+            "Statistic_Name": "T-statistic",
+            "Value_Real": log_real_ors.mean(),
+            "Value_Control": log_control_ors.mean(),
+            "N_Real": len(log_real_ors),
+            "N_Control": len(log_control_ors)
+        })
+
+    return analysis_results
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Perform group-level enrichment analysis on CpG traits.",
+        formatter_class=argparse.RawTextHelpFormatter
+    )
+    parser.add_argument("--analysis-dir", type=pathlib.Path, required=True, help="Path to the module's analysis directory containing 'real_results' and 'control_results' subfolders.")
+    parser.add_argument(
+        "--method", 
+        type=str, 
+        choices=['fisher', 'ttest'], 
+        default='fisher',
+        help="""The statistical method to use for group comparison:
+'fisher': Compares the frequency of enriched traits between groups using Fisher's Exact Test.
+'ttest': (Default) Compares the distribution of log(Odds-Ratios) using a T-test with imputation."""
+    )
+    parser.add_argument("--p-value-cutoff", type=float, default=0.05, help="P-value cutoff to define 'enrichment' in a single sample. Used only with --method fisher.")
+    args = parser.parse_args()
+
+    real_dir = args.analysis_dir / "real_results"
+    control_dir = args.analysis_dir / "control_results"
+    output_dir = args.analysis_dir
+
+    # Count total number of sample files for imputation/frequency counts
+    n_real_files = len(list(real_dir.glob('*.tsv')))
+    n_control_files = len(list(control_dir.glob('*.tsv')))
+    
+    if n_real_files == 0:
+        print(f"Error: No result files found in the real samples directory: {real_dir}")
+        return
+    if n_control_files == 0:
+        print(f"Error: No result files found in the control samples directory: {control_dir}")
+        return
+        
+    print(f"Found {n_real_files} real sample files and {n_control_files} control sample files.")
+
+    # Aggregate results from all files
+    real_results_df = _aggregate_results(real_dir)
+    control_results_df = _aggregate_results(control_dir)
+
+    analysis_results = []
+    if args.method == 'fisher':
+        # The fisher method can run even if one of the dataframes is empty
+        analysis_results = run_fisher_analysis(real_results_df, control_results_df, n_real_files, n_control_files, args.p_value_cutoff)
+    elif args.method == 'ttest':
+        # The t-test method implicitly requires both dataframes to have some data to draw traits from
+        if real_results_df.is_empty():
+            print(f"Warning: No valid result files found in the real samples directory: {real_dir}. Cannot perform T-test.")
+            return
+        analysis_results = run_ttest_analysis(real_results_df, control_results_df, n_real_files, n_control_files)
+
+    if not analysis_results:
+        print("Warning: No traits were eligible for statistical comparison. This can happen if no traits are enriched in any sample.")
+        return
+
+    # Save Final Results
+    final_df = pl.DataFrame(analysis_results).sort("P-value")
+    output_path = output_dir / f"group_comparison_{args.method}.tsv"
+    final_df.write_csv(output_path, separator='\t')
+    print(f"Successfully wrote group comparison results to {output_path}")
+
+if __name__ == "__main__":
+    main()
