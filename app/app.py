@@ -239,15 +239,14 @@ def main():
                     multi_sample_results_dir=multi_sample_results_dir,
                 )
 
-                # Run the final analysis in parallel
+                # Run the analysis in parallel
                 run_modular_analysis_parallel(
                     multi_sample_results_dir=multi_sample_results_dir,
                     modules_dir=APP_DIR / "Modules",
                     method=group_comparison_method
                 )
-
-                # Display the final results
-                #display_multi_sample_results(multi_sample_results_dir)
+                
+                display_multi_sample_results(multi_sample_results_dir)
 
 
             
