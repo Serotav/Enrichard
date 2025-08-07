@@ -53,23 +53,22 @@ def _aggregate_results(directory: pathlib.Path) -> pl.DataFrame:
 
 def run_fisher_analysis(real_df: pl.DataFrame, control_df: pl.DataFrame, n_real_total: int, n_control_total: int, p_cutoff: float) -> list:
     """
-    Performs group-level enrichment by comparing the frequency of significant traits.
+    Performs group-level enrichment by comparing the frequency of significant traits,
+    filtering results *after* the Fisher's Exact Test based on the resulting p-value.
     """
-    print(f"Running group comparison using Fisher's Exact Test with a p-value cutoff of {p_cutoff}.")
+    print(f"Running group comparison using Fisher's Exact Test, filtering results with a p-value cutoff of {p_cutoff}.")
     all_traits = sorted(list(set(real_df['Trait'].to_list()) | set(control_df['Trait'].to_list())))
     analysis_results = []
 
     for trait in all_traits:
-        n_real_enriched = real_df.filter((pl.col('Trait') == trait) & (pl.col('P-value') < p_cutoff)).height
-        n_control_enriched = control_df.filter((pl.col('Trait') == trait) & (pl.col('P-value') < p_cutoff)).height
+        n_real_enriched = real_df.filter(pl.col('Trait') == trait).height
+        n_control_enriched = control_df.filter(pl.col('Trait') == trait).height
 
-        # Create the 2x2 contingency table for the Fisher's Exact Test
         table = [
             [n_real_enriched, n_real_total - n_real_enriched],
             [n_control_enriched, n_control_total - n_control_enriched]
         ]
 
-        # The test is only meaningful if there's at least one enriched sample
         if n_real_enriched == 0 and n_control_enriched == 0:
             continue
 
@@ -86,13 +85,15 @@ def run_fisher_analysis(real_df: pl.DataFrame, control_df: pl.DataFrame, n_real_
             "N_Control": n_control_total
         })
         
-    return analysis_results
+    filtered_results = [result for result in analysis_results if result['P-value'] < p_cutoff]
+    return filtered_results
 
-def run_ttest_analysis(real_df: pl.DataFrame, control_df: pl.DataFrame, n_real_total: int, n_control_total: int) -> list:
+def run_ttest_analysis(real_df: pl.DataFrame, control_df: pl.DataFrame, n_real_total: int, n_control_total: int, p_cutoff: float) -> list:
     """
-    Performs group-level enrichment using a t-test on log(Odds-Ratios) with imputation.
+    Performs group-level enrichment using a t-test on log(Odds-Ratios) with imputation,
+    filtering results *after* the t-test based on the resulting p-value.
     """
-    print("Running group comparison using T-test with imputation.")
+    print(f"Running group comparison using T-test with imputation, filtering results with a p-value cutoff of {p_cutoff}.")
     all_traits = sorted(list(set(real_df['Trait'].to_list()) | set(control_df['Trait'].to_list())))
     analysis_results = []
 
@@ -104,8 +105,6 @@ def run_ttest_analysis(real_df: pl.DataFrame, control_df: pl.DataFrame, n_real_t
         real_ors.extend([1.0] * (n_real_total - len(real_ors)))
         control_ors.extend([1.0] * (n_control_total - len(control_ors)))
 
-        # After imputation, check if we have enough data to perform a t-test
-        # This would only fail if there is <2 real or <2 control samples in total.
         if len(real_ors) < 2 or len(control_ors) < 2:
             continue
 
@@ -113,7 +112,6 @@ def run_ttest_analysis(real_df: pl.DataFrame, control_df: pl.DataFrame, n_real_t
         log_real_ors = np.log(real_ors)
         log_control_ors = np.log(control_ors)
 
-        # Perform Welch's t-test (assumes unequal variances)
         stat, p_value = ttest_ind(log_real_ors, log_control_ors, equal_var=False, nan_policy='omit')
         
         analysis_results.append({
@@ -127,7 +125,8 @@ def run_ttest_analysis(real_df: pl.DataFrame, control_df: pl.DataFrame, n_real_t
             "N_Control": len(log_control_ors)
         })
 
-    return analysis_results
+    filtered_results = [result for result in analysis_results if result['P-value'] < p_cutoff]
+    return filtered_results
 
 
 def main():
@@ -178,7 +177,7 @@ def main():
         if real_results_df.is_empty():
             print(f"Warning: No valid result files found in the real samples directory: {real_dir}. Cannot perform T-test.")
             return
-        analysis_results = run_ttest_analysis(real_results_df, control_results_df, n_real_files, n_control_files)
+        analysis_results = run_ttest_analysis(real_results_df, control_results_df, n_real_files, n_control_files,args.p_value_cutoff)
 
     if not analysis_results:
         print("Warning: No traits were eligible for statistical comparison. This can happen if no traits are enriched in any sample.")
@@ -186,7 +185,7 @@ def main():
 
     # Save Final Results
     final_df = pl.DataFrame(analysis_results).sort("P-value")
-    output_path = output_dir / f"group_comparison_{args.method}.tsv"
+    output_path = output_dir / f"group_comparison_dumbbell_{args.method}.tsv"
     final_df.write_csv(output_path, separator='\t')
     print(f"Successfully wrote group comparison results to {output_path}")
 

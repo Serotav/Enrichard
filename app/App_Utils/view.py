@@ -338,3 +338,200 @@ def display_comparison_results(comparison_dir: pathlib.Path)->None:
             
             except Exception as e:
                 st.error(f"Error displaying comparison results for module '{module_name}': {e}")
+
+# --- MULTI SAMPLE ---
+def create_group_dumbbell_plot(df: pd.DataFrame) -> alt.Chart:
+    """
+    Creates an Altair dumbbell plot for multi-sample group comparison results.
+    Returns: An Altair Chart object representing the dumbbell plot.
+    """
+    if df.empty:
+        st.info("The result data is empty; cannot generate a plot.")
+        return None
+
+    # --- 1. Detect analysis method to set dynamic chart elements ---
+    method = df['Statistic_Name'].iloc[0]
+    if method == "T-statistic":
+        x_axis_title_base = "Mean log(Odds-Ratio)"
+        statistic_tooltip_title = "T-statistic"
+        chart_title = "Group Enrichment Comparison (T-test)"
+    elif method == "Group_Odds_Ratio":
+        x_axis_title_base = "Proportion of Enriched Samples"
+        statistic_tooltip_title = "Group Odds Ratio"
+        chart_title = "Group Enrichment Comparison (Fisher's Test)"
+    else:
+        x_axis_title_base = "Value"
+        statistic_tooltip_title = "Statistic"
+        chart_title = "Group Enrichment Comparison"
+
+    # --- 2. Filter data and prepare for plotting ---
+    df_to_plot = df.sort_values("P-value").head(20).copy()
+    sort_order = df_to_plot['Trait'].tolist()
+
+    # --- 3. Create the dumbbell plot components ---
+    
+    # The connecting line (the "bar") uses the original wide-format data
+    line = alt.Chart(df_to_plot).mark_rule().encode(
+        y=alt.Y('Trait:N', sort=sort_order, title="Enriched Trait"),
+        x=alt.X('Value_Control:Q', title=f"{x_axis_title_base} (Value per Group)"),
+        x2=alt.X2('Value_Real:Q'),
+        tooltip=[
+            alt.Tooltip('Trait:N', title="Trait"),
+            alt.Tooltip('P-value:Q', title="P-Value", format=".2e"),
+            alt.Tooltip('Statistic:Q', title=statistic_tooltip_title, format=".3f"),
+        ]
+    )
+
+    # For the points and legend, we transform the data to a long format
+    df_long = df_to_plot.melt(
+        id_vars=['Trait', 'P-value', 'Statistic'],
+        value_vars=['Value_Real', 'Value_Control'],
+        var_name='Group',
+        value_name='Value'
+    ).replace({'Value_Real': 'Real', 'Value_Control': 'Control'})
+
+    # The dots for both groups, colored by the new 'Group' column to create a legend
+    points = alt.Chart(df_long).mark_circle(size=100, opacity=0.9).encode(
+        y=alt.Y('Trait:N', sort=sort_order),
+        x=alt.X('Value:Q'),
+        color=alt.Color('Group:N',
+            scale=alt.Scale(
+                domain=['Real', 'Control'],
+                range=['#1f77b4', '#ff7f0e'] # Blue for Real, Orange for Control
+            ),
+            legend=alt.Legend(title="Sample Group")
+        ),
+        tooltip=[
+            alt.Tooltip('Trait:N', title="Trait"),
+            alt.Tooltip('Group:N', title="Group"),
+            alt.Tooltip('Value:Q', title="Value", format=".3f"),
+            alt.Tooltip('P-value:Q', title="P-Value", format=".2e"),
+            alt.Tooltip('Statistic:Q', title=statistic_tooltip_title, format=".3f"),
+        ]
+    )
+
+    # --- 4. Layer the charts and add final properties ---
+    chart = (line + points).properties(
+        title=chart_title
+    ).interactive()
+
+    return chart
+
+def display_multi_sample_results(multi_sample_results_dir: pathlib.Path):
+    """
+    Scans for group comparison result files, creates tabs for each module,
+    and displays the results using the appropriate chart based on the filename.
+    """
+    # Find all result files that match the new dumbbell plot naming convention
+    result_files = sorted(list(multi_sample_results_dir.glob('*/group_comparison_dumbbell_*.tsv')))
+    
+    if not result_files:
+        st.warning("Multi-sample group analysis complete, but no result files were found.")
+        return
+
+    st.header("Multi-Sample Group Comparison Results")
+
+    with st.expander("How to Interpret These Results (Methodology)", expanded=False):
+        render_group_analysis_methodology()
+    
+    st.markdown("---") 
+
+    # Create a unique list of module names to use for the tabs
+    module_names = sorted(list(set([path.parent.name for path in result_files])))
+    tabs = st.tabs(module_names)
+
+    # Create a mapping from module name to its result file for easy lookup
+    results_map = {path.parent.name: path for path in result_files}
+
+    for i, module_name in enumerate(module_names):
+        with tabs[i]:
+            file_path = results_map[module_name]
+            st.markdown(f"#### Module: `{module_name}`")
+            
+            try:
+                df = pl.read_csv(file_path, separator='\t').to_pandas()
+                if df.empty:
+                    st.info("No significant group-level traits were found for this module.")
+                    continue
+
+                # --- This is the core logic for selecting the plot type ---
+                if "_dumbbell_" in file_path.name:
+                    st.subheader("Group Enrichment Comparison")
+                    
+                    # Call the new (placeholder) plotting function
+                    group_plot = create_group_dumbbell_plot(df)
+                    
+                    # Only display the chart if the function returns one
+                    if group_plot:
+                        st.altair_chart(group_plot, use_container_width=True)
+                else:
+                    # Fallback for any other filename conventions you might add later
+                    st.warning(f"Could not determine plot type for '{file_path.name}'. Displaying raw data.")
+
+                # Always show the data table in an expander
+                with st.expander("Show Full Group Comparison Data"):
+                    float_cols = df.select_dtypes(include='float').columns
+                    format_dict = {col: '{:.2e}' for col in float_cols}
+                    st.dataframe(df.style.format(format_dict))
+
+            except Exception as e:
+                st.error(f"Error displaying results for module '{module_name}': {e}")
+
+def render_group_analysis_methodology():
+    """
+    Renders a detailed explanation of the multi-sample group comparison methodologies,
+    reflecting that the P-value cutoff is applied *after* the group-level test.
+    """
+    st.markdown("""
+    The goal of this analysis is to identify traits that are consistently and significantly enriched across a group of your **Real Samples** when compared to a group of randomly generated **Control Samples**. This helps distinguish true biological signals from random statistical noise. Two different statistical methods are provided to perform this comparison.
+    """)
+
+    # Use tabs to cleanly separate the explanation for each method
+    tab1, tab2 = st.tabs(["Fisher's Method (Frequency)", "T-test Method (Magnitude)"])
+
+    with tab1:
+        st.header("Fisher's Method: Comparing Frequencies")
+        st.markdown("""
+        This method answers the question: **"Is a trait found more *frequently* in the real samples than in the control samples?"**
+        
+        #### How It Works:
+        1.  For every unique trait, the analysis counts how many of your **Real Sample** files contain a result for that trait. This count becomes `N_real_enriched`.
+        2.  It does the same for the **Control Samples**, yielding `N_control_enriched`.
+        3.  These counts are used to build a 2x2 contingency table for a group-level comparison:
+        """)
+
+        st.markdown("""
+        | | Trait Present | Trait Absent |
+        |---|---|---|
+        | **Real Samples** | `N_real_enriched` | `N_real_total - N_real_enriched` |
+        | **Control Samples**| `N_control_enriched`| `N_control_total - N_control_enriched` |
+        """)
+        
+        st.markdown("""
+        4. A **Fisher's Exact Test** is performed on this table to generate a new, **group-level P-value**.
+        5. **Filtering:** Finally, the results from all tested traits are filtered. Only traits where this new **group-level P-value** is less than your chosen cutoff are shown in the final output.
+        
+        #### How to Interpret the Plot:
+        - **X-Axis (`Proportion of Enriched Samples`):** Shows the fraction of samples in a group where the trait was present in the results.
+        - **Blue Dot:** Represents the proportion for the **Real** sample group.
+        - **Orange Dot:** Represents the proportion for the **Control** sample group.
+        - **What to look for:** You are looking for traits where the **blue dot is significantly to the right** of the orange dot. This indicates a higher frequency of occurrence in your experimental samples.
+        """)
+
+    with tab2:
+        st.header("T-test Method: Comparing Magnitudes")
+        st.markdown("""
+        This method answers the question: **"Is the *average strength* of enrichment (measured by log Odds-Ratio) significantly higher in the real group than in the control group?"**
+
+        #### How It Works:
+        1.  For each trait, the analysis collects the calculated **Odds Ratios (ORs)** from every real and control sample where it appeared.
+        2.  **Imputation:** To create complete datasets, if a trait was not found in a sample's result file, we assign it an Odds Ratio of **1.0** (which corresponds to a log(OR) of **0**), representing a baseline of "no enrichment."
+        3.  A **Welch's t-test** is performed on the two complete sets of log(Odds-Ratios) to generate a new, **group-level P-value**.
+        4.  **Filtering:** Finally, the results from all tested traits are filtered. Only traits where this new **group-level P-value** from the t-test is less than your chosen cutoff are shown in the final output.
+
+        #### How to Interpret the Plot:
+        - **X-Axis (`Mean log(Odds-Ratio)`):** Shows the average enrichment strength for each group. A higher value means stronger enrichment on average.
+        - **Blue Dot:** Represents the mean log(OR) for the **Real** sample group.
+        - **Orange Dot:** Represents the mean log(OR) for the **Control** sample group.
+        - **What to look for:** You are looking for traits where the **blue dot is significantly to the right** of the orange dot, indicating a higher average enrichment magnitude in your experimental samples.
+        """)
