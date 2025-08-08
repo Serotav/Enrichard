@@ -421,9 +421,10 @@ def display_multi_sample_results(multi_sample_results_dir: pathlib.Path):
     """
     Scans for group comparison result files, creates tabs for each module,
     and displays the results using the appropriate chart based on the filename.
+    This function acts as a router, calling different plotting functions based on module type.
     """
-    # Find all result files that match the new dumbbell plot naming convention
-    result_files = sorted(list(multi_sample_results_dir.glob('*/group_comparison_dumbbell_*.tsv')))
+    # General glob pattern to find all group comparison files
+    result_files = sorted(list(multi_sample_results_dir.glob('*/group_comparison_*.tsv')))
     
     if not result_files:
         st.warning("Multi-sample group analysis complete, but no result files were found.")
@@ -436,11 +437,8 @@ def display_multi_sample_results(multi_sample_results_dir: pathlib.Path):
     
     st.markdown("---") 
 
-    # Create a unique list of module names to use for the tabs
     module_names = sorted(list(set([path.parent.name for path in result_files])))
     tabs = st.tabs(module_names)
-
-    # Create a mapping from module name to its result file for easy lookup
     results_map = {path.parent.name: path for path in result_files}
 
     for i, module_name in enumerate(module_names):
@@ -454,18 +452,23 @@ def display_multi_sample_results(multi_sample_results_dir: pathlib.Path):
                     st.info("No significant group-level traits were found for this module.")
                     continue
 
-                # --- This is the core logic for selecting the plot type ---
+                # --- ROUTER LOGIC: Choose plot based on filename ---
+                
+                # Case 1: Standard modules using dumbbell plot
                 if "_dumbbell_" in file_path.name:
                     st.subheader("Group Enrichment Comparison")
-                    
-                    # Call the new (placeholder) plotting function
-                    group_plot = create_group_dumbbell_plot(df)
-                    
-                    # Only display the chart if the function returns one
-                    if group_plot:
-                        st.altair_chart(group_plot, use_container_width=True)
+                    chart = create_group_dumbbell_plot(df)
+                    if chart:
+                        st.altair_chart(chart, use_container_width=True)
+                
+                # Case 2: Chromatin module using heatmap plot
+                elif "_heatmap_" in file_path.name:
+                    st.subheader("Group Enrichment Heatmap")
+                    chart = display_group_comparison_heatmap(df)
+                    if chart:
+                        st.altair_chart(chart, use_container_width=True)
+
                 else:
-                    # Fallback for any other filename conventions you might add later
                     st.warning(f"Could not determine plot type for '{file_path.name}'. Displaying raw data.")
 
                 # Always show the data table in an expander
@@ -476,6 +479,63 @@ def display_multi_sample_results(multi_sample_results_dir: pathlib.Path):
 
             except Exception as e:
                 st.error(f"Error displaying results for module '{module_name}': {e}")
+
+def display_group_comparison_heatmap(df: pd.DataFrame) -> alt.Chart:
+    """
+    Creates an Altair heatmap from group-level chromatin analysis results.
+
+    The color of each cell represents the T-statistic from the group comparison,
+    indicating both the significance and direction of the difference between the
+    real and control groups.
+
+    Args:
+        df: A pandas DataFrame containing the long-format group comparison results.
+            Expected columns: 'Cell_Type', 'State', 'P-value', 'T-statistic', etc.
+
+    Returns:
+        An Altair Chart object representing the summary heatmap.
+    """
+    if df.empty:
+        st.info("The result data is empty; cannot generate a plot.")
+        return None
+
+    # --- 1. Determine the dynamic range for the diverging color scale ---
+    # We use the T-statistic: positive means Real > Control, negative means Control > Real.
+    max_abs_t_stat = df['T-statistic'].abs().max()
+    
+    # Create a symmetrical domain around 0 for a balanced color scale
+    color_domain = [-max_abs_t_stat, 0, max_abs_t_stat]
+    
+    # Handle the edge case where all statistics are zero
+    if max_abs_t_stat == 0:
+        color_domain = [-1, 0, 1]
+
+    # --- 2. Build the Altair Heatmap ---
+    heatmap = alt.Chart(df).mark_rect().encode(
+        x=alt.X('State:N', title="Chromatin State", sort=None), # Use 'sort=None' to respect original order if possible
+        y=alt.Y('Cell_Type:N', title="Cell Type", sort=alt.Sort(field="P-value", op="min")), # Sort rows by most significant P-value
+        
+        # Color is based on the T-statistic for direction and magnitude
+        color=alt.Color('T-statistic:Q',
+            scale=alt.Scale(scheme='redblue', domain=color_domain, reverse=True),
+            legend=alt.Legend(title="T-statistic (Real vs Control)")
+        ),
+        
+        # Tooltip provides the full details for each cell
+        tooltip=[
+            alt.Tooltip('Cell_Type:N', title="Cell Type"),
+            alt.Tooltip('State:N', title="State"),
+            alt.Tooltip('P-value:Q', title="Group P-Value", format=".2e"),
+            alt.Tooltip('T-statistic:Q', title="Group T-statistic", format=".3f"),
+            alt.Tooltip('Mean_logOR_Real:Q', title="Mean log(OR) Real", format=".3f"),
+            alt.Tooltip('Mean_logOR_Control:Q', title="Mean log(OR) Control", format=".3f"),
+        ]
+    ).properties(
+        title="Group Comparison of Chromatin State Enrichment"
+    ).interactive()
+
+    return heatmap
+
 
 def render_group_analysis_methodology():
     """

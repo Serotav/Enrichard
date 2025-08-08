@@ -29,8 +29,11 @@ fi
 echo $COMMON_BACKGROUND
 rm "$COMMON_BACKGROUND"/*
 
-rm -rf "$MODULES_DIR"
-mkdir -p "$MODULES_DIR"
+for item in "${wehi_sets[@]}"; do
+    IFS=',' read -r set url <<< "$item"
+    echo "$MODULES_DIR/$set"
+    rm -rf "$MODULES_DIR/$set"
+done
 
 counter=0
 for item in "${wehi_sets[@]}"; do
@@ -47,8 +50,3 @@ for item in "${wehi_sets[@]}"; do
     fi
 done
 
-# Chormatine
-cp -r $CHROMATINE_TEMPLATE "$MODULES_DIR/Chromatine"
-
-# Histones
-cp -r $HISTONE_TEMPLATE "$MODULES_DIR/Histone"
