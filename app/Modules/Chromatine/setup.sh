@@ -8,11 +8,10 @@ CHROMATINE_RAW_DIR="$SCRIPT_DIR/raw_chromatine"
 METADATA_FILE="$SCRIPT_DIR/EID_metadata.tab"
 
 BACKGROUND_DIR="$SCRIPT_DIR/background"
-CACHED_DIR="$SCRIPT_DIR/cached"
 ANNOTATE_SCRIPT_PY="$SCRIPT_DIR/annotate.py"
 
 # Create necessary directories
-mkdir -p "$BACKGROUND_DIR" "$CACHED_DIR" "$CHROMATINE_RAW_DIR"
+mkdir -p "$BACKGROUND_DIR" "$CHROMATINE_RAW_DIR"
 
 # Exit if background files are already generated
 if [ -n "$(find "$BACKGROUND_DIR" -mindepth 1 -print -quit 2>/dev/null)" ]; then
@@ -52,7 +51,6 @@ annotate_background() {
     time python3 "$ANNOTATE_SCRIPT_PY" \
         "$source_filepath" \
         "$BACKGROUND_DIR/${base_name}_annotated.parquet" \
-        "$CACHED_DIR/${base_name}_cached.parquet" \
         "$CHROMATINE_RAW_DIR" \
         "$METADATA_FILE"
 }

@@ -53,7 +53,6 @@ def main():
     parser = argparse.ArgumentParser(description="Annotate probes with chromatin state data.")
     parser.add_argument('input_file', help='Probe manifest file (e.g., HM450.hg38.manifest.tsv)')
     parser.add_argument('output_file', help='Output annotated parquet file')
-    parser.add_argument('cached_file', help='Output cached summary parquet file (unused, for compatibility)')
     parser.add_argument('chromatine_dir', help='Directory with chromatin state .bed files')
     parser.add_argument('metadata_file', help='EID metadata file (unused, for compatibility)')
     args = parser.parse_args()
@@ -91,10 +90,6 @@ def main():
     final_annotated_df.write_parquet(args.output_file, compression='lz4')
     print(f"Annotation complete. Saved to {args.output_file}", file=stderr)
     
-    # Create a dummy cache file for compatibility with the setup script
-    print("Creating dummy cache file...", file=stderr)
-    pathlib.Path(args.cached_file).touch()
-    print(f"Dummy cache created at {args.cached_file}", file=stderr)
 
 
 if __name__ == "__main__":
