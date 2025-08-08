@@ -70,7 +70,7 @@ def main():
     ])
 
     chromatine_dir = pathlib.Path(args.chromatine_dir)
-    bed_files = sorted(list(chromatine_dir.glob("E*.bed.gz")))[:8] # Limiting to first 8 files
+    bed_files = sorted(list(chromatine_dir.glob("E*.bed.gz")))
 
     if not bed_files:
         raise FileNotFoundError(f"No .bed.gz files starting with 'E' found in {chromatine_dir}")

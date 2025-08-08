@@ -40,7 +40,7 @@ if [[ -z "$COMMON_BACKGROUND" || ! -d "$COMMON_BACKGROUND" ]]; then
     exit 1
 fi
 
-# --- Annotation Function ---
+# Annotation Function
 annotate_background() {
     local source_filepath="$1"
     local filename=$(basename "$source_filepath")
@@ -55,7 +55,7 @@ annotate_background() {
         "$METADATA_FILE"
 }
 
-# --- Main Loop ---
+# Main Loop 
 shopt -s nullglob
 source_files=("$COMMON_BACKGROUND"/*.tsv)
 shopt -u nullglob
@@ -78,5 +78,4 @@ wait
 
 # Clean up raw data to save space
 rm -rf "$CHROMATINE_RAW_DIR"
-
 echo "Chromatine State module setup complete."
