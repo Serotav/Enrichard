@@ -75,10 +75,6 @@ def handle_zip_extraction(zip_file, extract_to_dir: pathlib.Path) -> None:
     try:
         with zipfile.ZipFile(zip_file, 'r') as zip_ref:
             zip_ref.extractall(extract_to_dir)
-        st.info(f"Successfully extracted files to {extract_to_dir}")
-    except zipfile.BadZipFile:
-        st.error("The uploaded file is not a valid zip archive.")
-        st.stop()
     except Exception as e:
         st.error(f"Failed to extract zip file: {e}")
         st.stop()
@@ -88,7 +84,6 @@ def organize_extracted_samples(source_dir: pathlib.Path) -> None:
     Recursively finds all sample files, moves them to a structured top-level directory,
     and renames them to the standard 'sample.txt' name.
     """
-    st.info("Organizing extracted files into a standard structure...")
     
     # Find all files, excluding system files like .DS_Store
     all_files = [p for p in source_dir.rglob('*') if p.is_file() and not p.name.startswith('.')]
@@ -113,7 +108,6 @@ def organize_extracted_samples(source_dir: pathlib.Path) -> None:
         if path.is_dir() and not any(path.iterdir()):
             shutil.rmtree(path)
             
-    st.success("File organization complete.")
 
 
 import polars as pl

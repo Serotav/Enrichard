@@ -204,7 +204,6 @@ def main():
                 multi_sample_results_dir.mkdir(parents=True, exist_ok=True)
 
                 # Unzip user-provided samples 
-                st.info("Extracting samples from the zip archive...")
                 handle_zip_extraction(sample_source_multi, real_samples_dir)
                 organize_extracted_samples(real_samples_dir)
 
