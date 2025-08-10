@@ -129,8 +129,6 @@ def run_enrichment_pipeline_multi_sample(
     st.info(f"Starting parallel analysis for {len(commands)} samples...")
 
     # Create expanders for logs first
-    for item in commands:
-        item['log_expander'] = st.expander(f"Show Pipeline Log for {item['name']}", expanded=False)
 
     with st.spinner(f"Running enrichment for {len(commands)} samples in parallel. This may take a while..."):
         processes = [(item, subprocess.Popen(item['cmd'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)) for item in commands]
