@@ -130,6 +130,7 @@ def run_enrichment_pipeline_multi_sample(
 
     # Create expanders for logs first
 
+
     with st.spinner(f"Running enrichment for {len(commands)} samples in parallel. This may take a while..."):
         processes = [(item, subprocess.Popen(item['cmd'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)) for item in commands]
         
@@ -145,11 +146,6 @@ def run_enrichment_pipeline_multi_sample(
     # Display logs and check for errors
     any_errors = False
     for item in commands:
-        with item['log_expander']:
-            st.code(
-                f"""Command: {' '.join(item['cmd'])}\nReturn Code: {item['returncode']}\n\n--- STDOUT ---\n{item['stdout']}\n\n--- STDERR ---\n{item['stderr']}""",
-                language='log'
-            )
         if item['returncode'] != 0:
             any_errors = True
             st.error(f"Pipeline for {item['name']} failed. Check log above.")
