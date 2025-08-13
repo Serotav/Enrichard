@@ -52,7 +52,7 @@ def main():
     parser.add_argument("--output_folder", required=True, help="Path to the output folder.")
     args = parser.parse_args()
 
-    # --- 1. Load Data ---
+    # Load Data
     try:
         background_path = next((APP_DIR / "background").glob(f"{args.background_name}*annotated.parquet"))
         background_df = pl.read_parquet(background_path)
@@ -61,7 +61,7 @@ def main():
         print(f"Error loading data files for {args.background_name}: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # --- 2. Prepare for Analysis ---
+    # Prepare for Analysis
     all_traits = [col for col in background_df.columns if col != PROBE_ID_COL]
     
     sample_annotated_df = background_df.join(sample_probes_df, on=PROBE_ID_COL, how="inner")
@@ -74,7 +74,7 @@ def main():
     total_background_size = len(background_df)
     total_background_only_size = total_background_size - total_sample_size
 
-    # --- 3. Calculate Contingency Table ---
+    # Calculate Contingency Table
     print("Calculating contingency table...", file=sys.stderr)
     
     sample_counts = sample_annotated_df.select(all_traits).sum().unpivot(
@@ -91,14 +91,14 @@ def main():
         d = total_background_only_size - (pl.col('a_plus_c') - pl.col('a'))
     ).drop("a_plus_c")
 
-    # --- 4. Run Analysis ---
+    #  Run Analysis 
     print("Running enrichment tests...", file=sys.stderr)
     raw_results_df = run_fisher_test(contingency_df)
     
     print("Applying multiple testing correction...", file=sys.stderr)
     corrected_results_df = get_corrected_p_values(raw_results_df, args.correction, args.p_value)
 
-    # --- 5. Reshape for Heatmap Output ---
+    #  Reshape for Heatmap Output 
     output_dir = Path(args.output_folder) / APP_DIR.name
     output_dir.mkdir(parents=True, exist_ok=True)
     destination = output_dir / f"{APP_DIR.name}_HEATMAP.tsv"
@@ -125,7 +125,7 @@ def main():
         values="Display_OR"
     ).fill_null(1.0)
 
-    # --- 6. Add human-readable names and save ---
+    # Add human-readable names and save
     print("Mapping EID to cell type names...", file=sys.stderr)
     try:
         script_dir = pathlib.Path(__file__).parent

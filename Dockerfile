@@ -45,7 +45,7 @@ RUN pip3 install --break-system-packages --no-cache-dir -r python_requirements.t
 COPY --chown=1000:1000 app /app
 
 WORKDIR /app
-USER 1000
+USER 1006
 
 RUN chmod +x start.sh
 
