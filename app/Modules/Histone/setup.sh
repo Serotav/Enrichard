@@ -11,3 +11,4 @@ if [ ! -d "$BACKGROUND_DIR" ]; then
 fi
 
 
+echo "setup completed for $SCRIPT_DIR"

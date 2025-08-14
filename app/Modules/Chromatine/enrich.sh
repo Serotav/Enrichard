@@ -19,3 +19,5 @@ time python3 "$SCRIPT_DIR/do_enrich.py" \
     --p_value "$P_VALUE" \
     --correction "$CORRECTION" \
     --output_folder "$OUPUT_DIR"
+
+echo "setup completed for $SCRIPT_DIR"
