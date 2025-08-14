@@ -1,1 +1,1 @@
-http://10.16.248.114:1337/all_hg38lift.mnemonics.bedFiles.tgz
+https://egg2.wustl.edu/roadmap/data/byFileType/chromhmmSegmentations/ChmmModels/coreMarks/jointModel/final/all_hg38lift.mnemonics.bedFiles.tgz
