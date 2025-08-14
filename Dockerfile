@@ -47,8 +47,6 @@ COPY --chown=1000:1000 app /app
 WORKDIR /app
 USER 1006
 
-RUN chmod +x start.sh
-
 EXPOSE 8501
 
 

@@ -19,4 +19,4 @@ services:
     volumes:
       - ./app:/app
     
-    command: ["/app/start.sh"]
+    command: ["bash", "/app/start.sh"]
