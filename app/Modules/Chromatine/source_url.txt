@@ -1,1 +1,1 @@
-http://192.168.1.4:1337/all_hg38lift.mnemonics.bedFiles.tgz
+http://10.16.248.114:1337/all_hg38lift.mnemonics.bedFiles.tgz
