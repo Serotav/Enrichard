@@ -76,7 +76,6 @@ def create_dot_plot(df: pd.DataFrame)->None:
 
     return alt.Chart(df_to_plot).mark_circle().encode(
         y=alt.Y('Trait:N', sort=sort_order, title="Enriched Trait", axis=alt.Axis(labelLimit=100)),
-        y=alt.Y('Trait:N', sort=sort_order, title="Enriched Trait", axis=alt.Axis(labelLimit=10)),
         x=alt.X('Fold-Change:Q', title="Fold Change", scale=alt.Scale(zero=False)),
         color=alt.Color('P-Value:Q', 
                         scale=alt.Scale(scheme='yelloworangered', reverse=True), 
