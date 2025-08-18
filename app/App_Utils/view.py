@@ -47,6 +47,7 @@ def display_altair_heatmap(file_path: pathlib.Path):
             ]
         ).properties(
             title="Chromatin State Enrichment Heatmap",
+            width = chart_width
         ).interactive()
 
         st.altair_chart(heatmap, use_container_width=True)
