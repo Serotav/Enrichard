@@ -35,7 +35,7 @@ def display_altair_heatmap(file_path: pathlib.Path):
         cell_size, chart_height, chart_width= 15, 600, 800
         heatmap = alt.Chart(long_df).mark_rect(size=cell_size).encode( 
             x=alt.X('State:N', sort=state_order, title="Chromatin State"),
-            y=alt.Y('Cell_Type:N', title="Cell Type", axis=alt.Axis(labelLimit=100)),
+            y=alt.Y('Cell_Type:N', title="Cell Type", axis=alt.Axis(labelLimit=200)),
             color=alt.Color('Odds-Ratio:Q',
                 scale=alt.Scale(scheme='redblue', domain=color_domain, reverse=True),
                 legend=alt.Legend(title="Odds Ratio")
@@ -73,7 +73,7 @@ def create_dot_plot(df: pd.DataFrame)->None:
     sort_order = df_to_plot.sort_values("P-Value")["Trait"].tolist()
 
     return alt.Chart(df_to_plot).mark_circle().encode(
-        y=alt.Y('Trait:N', sort=sort_order, title="Enriched Trait", axis=alt.Axis(labelLimit=150)),
+        y=alt.Y('Trait:N', sort=sort_order, title="Enriched Trait", axis=alt.Axis(labelLimit=200)),
         x=alt.X('Fold-Change:Q', title="Fold Change", scale=alt.Scale(zero=False)),
         color=alt.Color('P-Value:Q', 
                         scale=alt.Scale(scheme='yelloworangered', reverse=True), 
