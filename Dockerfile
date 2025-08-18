@@ -45,7 +45,7 @@ RUN pip3 install --break-system-packages --no-cache-dir -r python_requirements.t
 COPY --chown=1006:1006 app /app
 
 WORKDIR /app
-USER 1006
+#USER 1006
 
 EXPOSE 8501
 
