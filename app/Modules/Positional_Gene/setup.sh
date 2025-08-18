@@ -58,4 +58,3 @@ done
 wait
 
 rm $RAW_BACKGROUND_DIR/* $RDATA_DIR/*
-echo "setup completed for $SCRIPT_DIR"

@@ -42,7 +42,7 @@ RUN pip3 install --break-system-packages --no-cache-dir -r python_requirements.t
 
 
 # Security in a world where no one cares tho
-COPY --chown=1000:1000 app /app
+COPY --chown=1006:1006 app /app
 
 WORKDIR /app
 USER 1006
