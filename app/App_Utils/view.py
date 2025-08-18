@@ -32,7 +32,7 @@ def display_altair_heatmap(file_path: pathlib.Path):
 
         # Get the order of states for proper sorting on the x-axis
         state_order = df.columns[1:]
-        cell_size, chart_height, chart_width= 5, 600, 800
+        cell_size, chart_height, chart_width= 15, 600, 800
         heatmap = alt.Chart(long_df).mark_rect(size=cell_size).encode( 
             x=alt.X('State:N', sort=state_order, title="Chromatin State"),
             y=alt.Y('Cell_Type:N', title="Cell Type", axis=alt.Axis(labelLimit=100)),
@@ -47,8 +47,6 @@ def display_altair_heatmap(file_path: pathlib.Path):
             ]
         ).properties(
             title="Chromatin State Enrichment Heatmap",
-            height=chart_height,  # ✨ Change: overall height ✨
-            width=chart_width    # ✨ Change: overall width ✨
         ).interactive()
 
         st.altair_chart(heatmap, use_container_width=True)
@@ -75,7 +73,7 @@ def create_dot_plot(df: pd.DataFrame)->None:
     sort_order = df_to_plot.sort_values("P-Value")["Trait"].tolist()
 
     return alt.Chart(df_to_plot).mark_circle().encode(
-        y=alt.Y('Trait:N', sort=sort_order, title="Enriched Trait", axis=alt.Axis(labelLimit=100)),
+        y=alt.Y('Trait:N', sort=sort_order, title="Enriched Trait", axis=alt.Axis(labelLimit=150)),
         x=alt.X('Fold-Change:Q', title="Fold Change", scale=alt.Scale(zero=False)),
         color=alt.Color('P-Value:Q', 
                         scale=alt.Scale(scheme='yelloworangered', reverse=True), 
