@@ -189,7 +189,6 @@ def process_and_merge_comparison_results(output_base_dir: pathlib.Path) -> pathl
         try:
             df_a = pl.read_csv(file_a, separator='\t')
             df_b = pl.read_csv(file_b, separator='\t')
-            st.info(f'doing {file_a}\n df a: {df_a.head()} b:{df_b.head()}')
             # Perform the Inner Join to find common traits 
             # We add suffixes to distinguish columns from A and B after the join
             merged_df = df_a.join(
@@ -199,6 +198,7 @@ def process_and_merge_comparison_results(output_base_dir: pathlib.Path) -> pathl
                 suffix="_B"
             )
 
+            st.info(f'doing {file_a}\n merge: {merged_df.head()}')
             # Save the merged result 
             output_module_dir = comparison_dir / module_name
             output_module_dir.mkdir(exist_ok=True)
