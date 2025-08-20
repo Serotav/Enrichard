@@ -92,7 +92,7 @@ def create_dot_plot(df: pd.DataFrame)->None:
         title="Top Enriched Pathways/Traits"
     ).interactive()
 
-def create_dumbbell_plot(df: pd.DataFrame)->None:
+def create_dumbbell_plot(df: pd.DataFrame)->alt.Chart:
     """
     Creates an Altair dumbbell plot to compare enrichment results from two samples.
     """
@@ -137,7 +137,7 @@ def create_dumbbell_plot(df: pd.DataFrame)->None:
     chart = (line + points_a + points_b).properties(
         title="Comparison of Common Enriched Traits"
     ).interactive()
-
+    return chart
 
 def render_methodology_explanation()->None:
     """Renders the explanation of the Fisher's Exact Test methodology."""

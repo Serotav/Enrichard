@@ -198,7 +198,6 @@ def process_and_merge_comparison_results(output_base_dir: pathlib.Path) -> pathl
                 suffix="_B"
             )
 
-            st.info(f'doing {file_a}\n merge: {merged_df.head()}')
             # Save the merged result 
             output_module_dir = comparison_dir / module_name
             output_module_dir.mkdir(exist_ok=True)
