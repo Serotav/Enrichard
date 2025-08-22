@@ -175,9 +175,6 @@ def process_and_merge_comparison_results(output_base_dir: pathlib.Path) -> pathl
         return None
 
     for file_a in result_files_a:
-        # just for now
-        if file_a.parent.name == "Histone" or file_a.parent.name == "Chromatine":
-            continue
 
         file_b = dir_b_modules / file_a.parent.name / file_a.name
         module_name = file_a.parent.name
