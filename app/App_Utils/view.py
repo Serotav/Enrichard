@@ -46,7 +46,7 @@ def display_altair_heatmap(file_path: pathlib.Path):
                 alt.Tooltip('Odds-Ratio:Q', title="Odds Ratio", format=".3f")
             ]
         ).properties(
-            title=f"{str(file_path.parent)} Enrichment Heatmap",
+            title=f"{str(file_path.parent.name)} Enrichment Heatmap",
             width = chart_width
         ).interactive()
 

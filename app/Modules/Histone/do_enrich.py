@@ -53,7 +53,7 @@ def main():
 
     # --- 1. Load Data ---
     try:
-        background_path = next((APP_DIR / "histone_annotated").glob(f"{args.background_name}*annotated.parquet"))
+        background_path = next((APP_DIR / "histone_annotated").glob(f"{args.background_name}.hg*annotated.parquet"))
         background_df = pl.read_parquet(background_path)
         sample_probes_df = pl.read_csv(Path(args.user_dir) / USER_SAMPLE_NAME, has_header=False).rename({"column_1": PROBE_ID_COL})
     except (StopIteration, Exception) as e:
