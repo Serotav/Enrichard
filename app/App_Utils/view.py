@@ -46,7 +46,7 @@ def display_altair_heatmap(file_path: pathlib.Path):
                 alt.Tooltip('Odds-Ratio:Q', title="Odds Ratio", format=".3f")
             ]
         ).properties(
-            title="Chromatin State Enrichment Heatmap",
+            title=f"{str(file_path.parent)} Enrichment Heatmap",
             width = chart_width
         ).interactive()
 
@@ -268,7 +268,6 @@ def display_comparison_results(comparison_dir: pathlib.Path)->None:
                 # Handle heatmap files differently
                 if "_HEATMAP" in file_path.name:
                     st.subheader("Heatmap Comparison")
-                    st.info("Heatmap comparison view is not yet implemented. Showing individual heatmaps.")
                     
                     col1, col2 = st.columns(2)
                     with col1:
