@@ -176,6 +176,11 @@ def process_and_merge_comparison_results(output_base_dir: pathlib.Path) -> pathl
 
     for file_a in result_files_a:
 
+        if "_HEATMAP" in file_a:
+            fake_heatmap = comparison_dir / module_name / "_HEATMAP.tsv"
+            fake_heatmap.touch()
+            continue
+
         file_b = dir_b_modules / file_a.parent.name / file_a.name
         module_name = file_a.parent.name
         
