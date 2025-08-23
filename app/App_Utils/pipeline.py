@@ -176,14 +176,14 @@ def process_and_merge_comparison_results(output_base_dir: pathlib.Path) -> pathl
 
     for file_a in result_files_a:
 
+        file_b = dir_b_modules / file_a.parent.name / file_a.name
+        module_name = file_a.parent.name
+
         if "_HEATMAP" in str(file_a):
-            st.info("heatmap for {file_a}")
+            st.info(f"heatmap for {str(file_a)}")
             fake_heatmap = comparison_dir / module_name / f"{module_name}_HEATMAP.tsv"
             fake_heatmap.touch()
             continue
-
-        file_b = dir_b_modules / file_a.parent.name / file_a.name
-        module_name = file_a.parent.name
         
         if not file_b.exists():
             st.warning(f"Result file for module '{module_name}' not found for Sample B. Skipping.")
