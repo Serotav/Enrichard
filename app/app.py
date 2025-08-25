@@ -112,11 +112,12 @@ def main():
         # Configure Analysis Parameters (This section remains mostly the same) 
         st.header("Configure Analysis Parameters")
         col1, col2, col3 = st.columns(3)
+        selected_background_name = None
         custom_background_file = None
         
         # Make the background selector conditional
         if analysis_type == "Single Sample Enrichment" or analysis_type == "Multi-Sample Group Comparison":
-            with col1:
+            with col3:
                 st.subheader("Background Universe")
                 available_choices = get_background_options() + ['custom']
                 selected_background_name = st.selectbox("Choose the background set", options=available_choices)
@@ -124,11 +125,11 @@ def main():
                     st.info("Your custom background should be a file with one CpG ID per line.")
                     custom_background_file = st.file_uploader("Upload your custom background file", type=['csv', 'txt'], key='custom_bg')
         
-        with col2:
+        with col1:
             st.subheader("Statistical Options")
             p_value_threshold = st.number_input("P-value threshold", 0.0, 1.0, 0.05, 0.01, "%.2f")
         
-        with col3:
+        with col2:
             st.subheader("Correction Method")
             correction_options = sorted(list(multitest_methods_names.values()) + ['none'])
             default_index = correction_options.index('Bonferroni')
