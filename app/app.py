@@ -134,7 +134,11 @@ def main():
             correction_options = sorted(list(multitest_methods_names.values()) + ['none'])
             default_index = correction_options.index('Bonferroni')
             selected_correction_method = st.selectbox("Multiple Testing Correction", options=correction_options, index=default_index)
-        
+            # i cannot fucking belive it: using the above would work (in multipletests) for all test correction BUT NOT FOR "FDR Benjamini-Hochberg" FOR SOME FUCKING REASON
+            if selected_correction_method != "none":
+                inverted_dict = {value: key for key, value in multitest_methods_names.items()}
+                selected_correction_method = inverted_dict[selected_correction_method]
+
         # Run Button Logic, check both samples for comparison mode
         run_button_disabled = (
             (analysis_type == "Single Sample Enrichment" and sample_source_1 is None) or
