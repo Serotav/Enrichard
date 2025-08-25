@@ -108,6 +108,8 @@ def create_dumbbell_plot(df: pd.DataFrame)->alt.Chart:
         y=alt.Y('Trait:N', sort=sort_order, title="Enriched Trait"),
         tooltip=[
             alt.Tooltip('Trait:N'),
+            alt.Tooltip('a:Q', title="Count (A)"),
+            alt.Tooltip('a_B:Q', title="Count (B)"),
             alt.Tooltip('Fold-Change:Q', title="Fold Change (A)", format=".2f"),
             alt.Tooltip('Fold-Change_B:Q', title="Fold Change (B)", format=".2f"),
             alt.Tooltip('P-Value:Q', title="P-Value (A)", format=".2e"),
