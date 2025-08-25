@@ -114,13 +114,15 @@ def main():
         col1, col2, col3 = st.columns(3)
         custom_background_file = None
         
-        with col1:
-            st.subheader("Background Universe")
-            available_choices = get_background_options() + ['custom']
-            selected_background_name = st.selectbox("Choose the background set", options=available_choices)
-            if selected_background_name == 'custom':
-                st.info("Your custom background should be a file with one CpG ID per line.")
-                custom_background_file = st.file_uploader("Upload your custom background file", type=['csv', 'txt'], key='custom_bg')
+        # Make the background selector conditional
+        if analysis_type == "Single Sample Enrichment" or analysis_type == "Multi-Sample Group Comparison":
+            with col1:
+                st.subheader("Background Universe")
+                available_choices = get_background_options() + ['custom']
+                selected_background_name = st.selectbox("Choose the background set", options=available_choices)
+                if selected_background_name == 'custom':
+                    st.info("Your custom background should be a file with one CpG ID per line.")
+                    custom_background_file = st.file_uploader("Upload your custom background file", type=['csv', 'txt'], key='custom_bg')
         
         with col2:
             st.subheader("Statistical Options")
