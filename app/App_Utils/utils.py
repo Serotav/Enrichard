@@ -110,7 +110,6 @@ def organize_extracted_samples(source_dir: pathlib.Path) -> None:
             
 
 
-import polars as pl
 
 def create_control_samples(real_samples_dir: pathlib.Path, background_path: pathlib.Path, control_samples_dir: pathlib.Path) -> None:
     """

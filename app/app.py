@@ -77,12 +77,17 @@ def main():
             uploaded_file_A = st.file_uploader("Upload file for Group A", type=['csv', 'txt'], key="uploader_A")
             if uploaded_file_A:
                 sample_source_1 = uploaded_file_A
+            
+            available_choices = get_background_options()
+            selected_background_name_A = st.selectbox("Choose background for Sample A", options=available_choices, key="bg_A")
 
         with col_b:
             st.subheader("Sample B")
             uploaded_file_B = st.file_uploader("Upload file for Group B", type=['csv', 'txt'], key="uploader_B")
             if uploaded_file_B:
                 sample_source_2 = uploaded_file_B
+
+            selected_background_name_B = st.selectbox("Choose background for Sample B", options=available_choices, key="bg_B")
 
     elif analysis_type == "Multi-Sample Group Comparison":
         st.header("Multi-Sample Group Input")
@@ -180,10 +185,10 @@ def main():
                 save_uploaded_file(sample_source_1, user_sample_a_path/ USER_SAMPLE_NAME)
                 save_uploaded_file(sample_source_2, user_sample_b_path/ USER_SAMPLE_NAME)
                 
-                # Run the new two-sample pipeline function
                 run_enrichment_pipeline_2samples(
                     user_dir=user_dir,
-                    background=background,
+                    background_A=selected_background_name_A, 
+                    background_B=selected_background_name_B, 
                     p_value=p_value_threshold,
                     correction_method=selected_correction_method
                 )

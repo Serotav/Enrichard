@@ -34,7 +34,7 @@ def run_enrichment_pipeline(user_dir: pathlib.Path, outputfoler:pathlib.Path, ba
     else:
         st.success("Pipeline completed successfully!")
 
-def run_enrichment_pipeline_2samples( user_dir: pathlib.Path, background: str, p_value: float,correction_method: str) -> None:
+def run_enrichment_pipeline_2samples( user_dir: pathlib.Path, background_A: str, background_B:str, p_value: float,correction_method: str) -> None:
     """
     Executes the enrichment pipeline for two samples in PARALLEL.
     """
@@ -52,12 +52,12 @@ def run_enrichment_pipeline_2samples( user_dir: pathlib.Path, background: str, p
     command_a = [
         'bash', str(MASTER_SCRIPT_PATH),
         str(user_dir_module_A), str(output_dir_a),
-        str(background), str(p_value), str(correction_method)
+        str(background_A), str(p_value), str(correction_method)
     ]
     command_b = [
         'bash', str(MASTER_SCRIPT_PATH),
         str(user_dir_module_B), str(output_dir_b),
-        str(background), str(p_value), str(correction_method)
+        str(background_B), str(p_value), str(correction_method)
     ]
 
     st.markdown("---")
