@@ -106,17 +106,19 @@ def run_enrichment_pipeline_multi_sample(
     correction_method: str
 ) -> None:
     """
-    Executes the enrichment pipeline for multiple real and control samples in parallel.
+    Executes the enrichment pipeline for multiple samples using a queue
+    to limit the number of parallel processes.
     """
     commands = []
-    
+    max_parallel_processes = 48
+
     # Prepare commands for real samples
     for sample_path in real_samples_dir.iterdir():
         if not sample_path.is_dir(): continue
         output_dir = sample_path / USER_MODULE_OUTPUT
         output_dir.mkdir(parents=True, exist_ok=True)
         cmd = ['bash', str(MASTER_SCRIPT_PATH), str(sample_path), str(output_dir), str(background), str(p_value), str(correction_method)]
-        commands.append({'cmd': cmd, 'name': f"Real: {sample_path.name}", 'log_expander': None})
+        commands.append({'cmd': cmd, 'name': f"Real: {sample_path.name}"})
 
     # Prepare commands for control samples
     for sample_path in control_samples_dir.iterdir():
@@ -124,36 +126,71 @@ def run_enrichment_pipeline_multi_sample(
         output_dir = sample_path / USER_MODULE_OUTPUT
         output_dir.mkdir(parents=True, exist_ok=True)
         cmd = ['bash', str(MASTER_SCRIPT_PATH), str(sample_path), str(output_dir), str(background), str(p_value), str(correction_method)]
-        commands.append({'cmd': cmd, 'name': f"Control: {sample_path.name}", 'log_expander': None})
+        commands.append({'cmd': cmd, 'name': f"Control: {sample_path.name}"})
 
     st.markdown("---")
-    st.info(f"Starting parallel analysis for {len(commands)} samples...")
+    
+    total_commands = len(commands)
+    if total_commands == 0:
+        st.warning("No samples found to process.")
+        return
 
-    # Create expanders for logs first
+    st.info(f"Found {total_commands} samples. Starting analysis with a maximum of {max_parallel_processes} parallel jobs.")
 
+    
+    completed_items = []
+    running_processes = []
+    # A copy of the commands list to use as a queue
+    commands_to_run = list(commands)
 
-    with st.spinner(f"Running enrichment for {len(commands)} samples in parallel. This may take a while..."):
-        processes = [(item, subprocess.Popen(item['cmd'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)) for item in commands]
+    # Setup Streamlit placeholders for dynamic updates
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+
+    while commands_to_run or running_processes:
         
-        # Wait for all processes to complete
-        for item, process in processes:
-            stdout, stderr = process.communicate()
-            item['stdout'] = stdout
-            item['stderr'] = stderr
-            item['returncode'] = process.returncode
+        # Fill the process pool up to the max limit
+        while len(running_processes) < max_parallel_processes and commands_to_run:
+            item = commands_to_run.pop(0)
+            process = subprocess.Popen(item['cmd'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            running_processes.append((item, process))
 
-    st.success("All parallel pipelines completed!")
+        # Check for completed processes and handle them (we iterte over a copy to be safe )
+        for item, process in running_processes[:]:
+            if process.poll() is not None:
+                stdout, stderr = process.communicate()
+                
+                item['stdout'] = stdout
+                item['stderr'] = stderr
+                item['returncode'] = process.returncode
+                
+                completed_items.append(item)
+                running_processes.remove((item, process))
 
-    # Display logs and check for errors
+        completed_count = len(completed_items)
+        progress = completed_count / total_commands
+        progress_bar.progress(progress)
+        status_text.info(f"Processing... Completed {completed_count} of {total_commands} samples. ({len(running_processes)} currently running)")
+
+        time.sleep(0.1)
+
+    status_text.success("All pipelines completed!")
+    progress_bar.progress(1.0)
+
     any_errors = False
-    for item in commands:
+    for item in completed_items:
         if item['returncode'] != 0:
             any_errors = True
-            st.error(f"Pipeline for {item['name']} failed. Check log above.")
+            with st.expander(f"Error in pipeline for {item['name']}", expanded=True):
+                st.error("Pipeline failed with a non-zero exit code.")
+                st.code(f"Exit Code: {item['returncode']}\n\n--- STDOUT ---\n{item['stdout']}\n\n--- STDERR ---\n{item['stderr']}", language='bash')
+
 
     if any_errors:
         st.error("One or more pipeline executions failed. Please check the logs above for details.")
         st.stop()
+    else:
+        st.success("All samples processed successfully!")
 
 
 def process_and_merge_comparison_results(output_base_dir: pathlib.Path) -> pathlib.Path:
