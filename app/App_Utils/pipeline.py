@@ -111,7 +111,7 @@ def run_enrichment_pipeline_multi_sample(
     to limit the number of parallel processes.
     """
     commands = []
-    max_parallel_processes = int(os.getenv('MAX_NUMBER_OF_PROCESS', '16'))
+    max_parallel_processes = int(os.getenv('MAX_NUMBER_OF_PROCESS', '32'))
 
     # Prepare commands for real samples
     for sample_path in real_samples_dir.iterdir():

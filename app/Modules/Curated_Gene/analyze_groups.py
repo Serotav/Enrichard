@@ -8,48 +8,47 @@ from scipy.stats import ttest_ind, fisher_exact
 
 def _aggregate_results(directory: pathlib.Path) -> pl.DataFrame:
     """
-    Finds and concatenates all result .tsv files in a given directory,
-    using the 'P-adj' column for p-values and calculating the Odds-Ratio.
+    Finds and concatenates all result .tsv files in a given directory using
+    Polars' lazy evaluation for optimized batch processing. It calculates
+    the Odds-Ratio and selects the required columns.
     """
-    all_dfs = []
-    required_cols = ["Trait", "a", "b", "c", "d", "P-adj"]
+    # Define the glob pattern to find all .tsv files in the directory.
+    file_pattern = str(directory / '*.tsv')
 
-    for file_path in directory.glob('*.tsv'):
-        try:
-            df = pl.read_csv(file_path, separator='\t', null_values="NA")
-
-            # Check if all required columns are present in the file.
-            if not all(col in df.columns for col in required_cols):
-                print(f"Warning: Skipping file {file_path} because it lacks required columns ({', '.join(required_cols)}).")
-                continue
-
-            # Enforce consistent data types for all columns to prevent schema errors.
-            df = df.with_columns(
-                pl.col("Trait").cast(pl.String),
-                pl.col("P-adj").cast(pl.Float64, strict=False), # strict=False turns parsing errors into nulls
-                pl.col(["a", "b", "c", "d"]).cast(pl.Int64)
-            ).rename({"P-adj": "P-value"})
-            
-            # Calculate the Odds-Ratio.
-            df_with_or = df.with_columns(
-                pl.struct(['a', 'b', 'c', 'd']).map_elements(
-                    lambda cols: ((cols['a'] + 0.5) * (cols['d'] + 0.5)) / ((cols['b'] + 0.5) * (cols['c'] + 0.5)),
-                    return_dtype=pl.Float64
-                ).alias("Odds-Ratio")
-            )
-            
-            # Select only the columns needed for the group-level analysis.
-            all_dfs.append(df_with_or.select(["Trait", "Odds-Ratio", "P-value"]))
-
-        except Exception as e:
-            print(f"An unexpected error occurred while processing {file_path}: {e}")
-            continue
+    # Define the expected schema to ensure consistency across all files.
+    # This helps Polars parse the data correctly and quickly.
+    required_schema = {
+        "Trait": pl.String,
+        "a": pl.Int64,
+        "b": pl.Int64,
+        "c": pl.Int64,
+        "d": pl.Int64,
+        "P-adj": pl.Float64
+    }
     
-    if not all_dfs:
+    try:
+        lazy_df = pl.scan_csv(
+            file_pattern, 
+            separator='\t', 
+            null_values="NA", 
+            schema=required_schema,
+            infer_schema_length=0 # Do not infer schema, use the one provided
+        )
+
+        processed_lazy_df = (
+            lazy_df
+            .rename({"P-adj": "P-value"})
+            .with_columns(
+                Odds_Ratio=((pl.col("a") + 0.5) * (pl.col("d") + 0.5)) / ((pl.col("b") + 0.5) * (pl.col("c") + 0.5))
+            )
+            .select(["Trait", "Odds-Ratio", "P-value"])
+        )
+
+        return processed_lazy_df.collect()
+
+    except Exception as e:
+        print(f"An error occurred during batch processing of files in {directory}: {e}")
         return pl.DataFrame()
-        
-    # Concatenate all the processed DataFrames into one.
-    return pl.concat(all_dfs)
 
 def run_fisher_analysis(real_df: pl.DataFrame, control_df: pl.DataFrame, n_real_total: int, n_control_total: int, p_cutoff: float) -> list:
     """
