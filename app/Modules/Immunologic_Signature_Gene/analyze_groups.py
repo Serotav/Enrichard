@@ -88,45 +88,66 @@ def run_fisher_analysis(real_df: pl.DataFrame, control_df: pl.DataFrame, n_real_
     filtered_results = [result for result in analysis_results if result['P-value'] < p_cutoff]
     return filtered_results
 
-def run_ttest_analysis(real_df: pl.DataFrame, control_df: pl.DataFrame, n_real_total: int, n_control_total: int, p_cutoff: float) -> list:
+def run_ttest_analysis(real_df: pl.DataFrame, control_df: pl.DataFrame, n_real_total: int, n_control_total: int, p_cutoff: float) -> pl.DataFrame:
     """
-    Performs group-level enrichment using a t-test on log(Odds-Ratios) with imputation,
-    filtering results *after* the t-test based on the resulting p-value.
+    Performs group-level enrichment using a t-test on log(Odds-Ratios) with
+    a robust, optimized Polars approach.
     """
-    print(f"Running group comparison using T-test with imputation, filtering results with a p-value cutoff of {p_cutoff}.")
-    all_traits = sorted(list(set(real_df['Trait'].to_list()) | set(control_df['Trait'].to_list())))
-    analysis_results = []
+    print(f"Running group comparison using T-test with a p-value cutoff of {p_cutoff}.")
 
-    for trait in all_traits:
-        real_ors = real_df.filter(pl.col('Trait') == trait)['Odds-Ratio'].to_list()
-        control_ors = control_df.filter(pl.col('Trait') == trait)['Odds-Ratio'].to_list()
+    combined_df = pl.concat([
+        real_df.with_columns(pl.lit("real").alias("group")),
+        control_df.with_columns(pl.lit("control").alias("group"))
+    ])
 
-        # Impute OR=1.0 for samples where the trait was not found/enriched
+    analysis_df = combined_df.group_by("Trait").agg(
+        pl.col("Odds-Ratio").filter(pl.col("group") == "real").alias("real_ors"),
+        pl.col("Odds-Ratio").filter(pl.col("group") == "control").alias("control_ors")
+    )
+
+    def perform_ttest_on_lists(row):
+        real_ors = row["real_ors"] if row["real_ors"] is not None else []
+        control_ors = row["control_ors"] if row["control_ors"] is not None else []
+        
+        # Impute OR=1.0 for samples where the trait was not found/enriched.
         real_ors.extend([1.0] * (n_real_total - len(real_ors)))
         control_ors.extend([1.0] * (n_control_total - len(control_ors)))
-
+        
+        # If there's not enough data for a t-test, return a dictionary of NaNs
         if len(real_ors) < 2 or len(control_ors) < 2:
-            continue
+            return {"Statistic": np.nan, "P-value": np.nan, "Value_Real": np.nan, "Value_Control": np.nan}
 
-        # Transform data (log(1.0) = 0)
+        # Perform the t-test on the log-transformed Odds-Ratios.
         log_real_ors = np.log(real_ors)
         log_control_ors = np.log(control_ors)
-
         stat, p_value = ttest_ind(log_real_ors, log_control_ors, equal_var=False, nan_policy='omit')
         
-        analysis_results.append({
-            "Trait": trait,
-            "P-value": p_value,
-            "Statistic": stat,
-            "Statistic_Name": "T-statistic",
-            "Value_Real": log_real_ors.mean(),
-            "Value_Control": log_control_ors.mean(),
-            "N_Real": len(log_real_ors),
-            "N_Control": len(log_control_ors)
-        })
+        return {
+            "Statistic": stat, 
+            "P-value": p_value, 
+            "Value_Real": np.mean(log_real_ors), 
+            "Value_Control": np.mean(log_control_ors)
+        }
 
-    filtered_results = [result for result in analysis_results if result['P-value'] < p_cutoff]
-    return filtered_results
+    results_df = analysis_df.with_columns(
+        pl.struct(["real_ors", "control_ors"]).map_elements(
+            perform_ttest_on_lists,
+            return_dtype=pl.Struct([
+                pl.Field("Statistic", pl.Float64), 
+                pl.Field("P-value", pl.Float64),
+                pl.Field("Value_Real", pl.Float64),
+                pl.Field("Value_Control", pl.Float64)
+            ])
+        ).alias("ttest_result")
+    ).unnest("ttest_result").drop(["real_ors", "control_ors"]).drop_nulls()
+
+    final_df = results_df.with_columns(
+        pl.lit("T-statistic").alias("Statistic_Name"),
+        pl.lit(n_real_total).alias("N_Real"),
+        pl.lit(n_control_total).alias("N_Control")
+    ).filter(pl.col("P-value") < p_cutoff)
+
+    return final_df
 
 
 def main():
