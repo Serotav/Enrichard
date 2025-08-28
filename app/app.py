@@ -98,12 +98,7 @@ def main():
         if uploaded_zip_file:
             sample_source_multi = uploaded_zip_file
         
-        group_comparison_method = st.selectbox(
-            "Select Group Comparison Method",
-            options=["fisher", "ttest"],
-            index=1,  # Default to 'fisher'
-            help="Choose the statistical method for comparing the real vs. control groups. 'fisher' compares enrichment frequency (recommended), while 'ttest' compares the average Odds Ratios."
-        )
+        group_comparison_method = "ttest"
 
     # This part of the logic runs if at least one sample is provided 
     # The condition will need to be updated when we add the comparison logic

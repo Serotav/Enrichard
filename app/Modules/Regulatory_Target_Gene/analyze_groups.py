@@ -51,43 +51,6 @@ def _aggregate_results(directory: pathlib.Path) -> pl.DataFrame:
         print(f"An error occurred during batch processing of files in {directory}: {e}")
         return pl.DataFrame()       
 
-def run_fisher_analysis(real_df: pl.DataFrame, control_df: pl.DataFrame, n_real_total: int, n_control_total: int, p_cutoff: float) -> list:
-    """
-    Performs group-level enrichment by comparing the frequency of significant traits,
-    filtering results *after* the Fisher's Exact Test based on the resulting p-value.
-    """
-    print(f"Running group comparison using Fisher's Exact Test, filtering results with a p-value cutoff of {p_cutoff}.")
-    all_traits = sorted(list(set(real_df['Trait'].to_list()) | set(control_df['Trait'].to_list())))
-    analysis_results = []
-
-    for trait in all_traits:
-        n_real_enriched = real_df.filter(pl.col('Trait') == trait).height
-        n_control_enriched = control_df.filter(pl.col('Trait') == trait).height
-
-        table = [
-            [n_real_enriched, n_real_total - n_real_enriched],
-            [n_control_enriched, n_control_total - n_control_enriched]
-        ]
-
-        if n_real_enriched == 0 and n_control_enriched == 0:
-            continue
-
-        group_or, p_value = fisher_exact(table)
-
-        analysis_results.append({
-            "Trait": trait,
-            "P-value": p_value,
-            "Statistic": group_or,
-            "Statistic_Name": "Group_Odds_Ratio",
-            "Value_Real": n_real_enriched / n_real_total if n_real_total > 0 else 0,
-            "Value_Control": n_control_enriched / n_control_total if n_control_total > 0 else 0,
-            "N_Real": n_real_total,
-            "N_Control": n_control_total
-        })
-        
-    filtered_results = [result for result in analysis_results if result['P-value'] < p_cutoff]
-    return filtered_results
-
 def run_ttest_analysis(real_df: pl.DataFrame, control_df: pl.DataFrame, n_real_total: int, n_control_total: int, p_cutoff: float) -> pl.DataFrame:
     """
     Performs group-level enrichment using a t-test on log(Odds-Ratios) with
@@ -159,11 +122,10 @@ def main():
     parser.add_argument(
         "--method", 
         type=str, 
-        choices=['fisher', 'ttest'], 
-        default='fisher',
+        choices=['ttest'], 
+        default='ttest',
         help="""The statistical method to use for group comparison:
-'fisher': Compares the frequency of enriched traits between groups using Fisher's Exact Test.
-'ttest': (Default) Compares the distribution of log(Odds-Ratios) using a T-test with imputation."""
+        'ttest': (Default) Compares the distribution of log(Odds-Ratios) using a T-test with imputation."""
     )
     parser.add_argument("--p-value-cutoff", type=float, default=0.05, help="P-value cutoff to define 'enrichment' in a single sample. Used only with --method fisher.")
     args = parser.parse_args()
@@ -189,14 +151,10 @@ def main():
     real_results_df = _aggregate_results(real_dir)
     control_results_df = _aggregate_results(control_dir)
 
-    final_df = pl.DataFrame()
-    if args.method == 'fisher':
-        final_df = run_fisher_analysis(real_results_df, control_results_df, n_real_files, n_control_files, args.p_value_cutoff)
-    elif args.method == 'ttest':
-        if real_results_df.is_empty():
-            print(f"Warning: No valid data found for real samples. Cannot perform T-test.")
-            return
-        final_df = run_ttest_analysis(real_results_df, control_results_df, n_real_files, n_control_files, args.p_value_cutoff)
+    if real_results_df.is_empty():
+        print(f"Warning: No valid data found for real samples. Cannot perform T-test.")
+        return
+    final_df = run_ttest_analysis(real_results_df, control_results_df, n_real_files, n_control_files, args.p_value_cutoff)
 
     if final_df.is_empty():
         print("Warning: No traits passed the significance cutoff.")
