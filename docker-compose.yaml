@@ -12,6 +12,8 @@ services:
     - USER_SAMPLE_NAME=user_sample.txt
     - USER_MODULE_OUTPUT=Module_output
     - RUN_MODE=server #local
+    # Max number of process active in the multi sample pipeline 
+    - MAX_NUMBER_OF_PROCESS=32
     #user: "1006:1006"
     ports:
       - "8501:8501"

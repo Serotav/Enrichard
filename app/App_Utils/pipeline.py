@@ -4,6 +4,7 @@ import pathlib
 import polars as pl
 import time
 import shutil
+import os
 
 from .config import *
 
@@ -110,7 +111,7 @@ def run_enrichment_pipeline_multi_sample(
     to limit the number of parallel processes.
     """
     commands = []
-    max_parallel_processes = 48
+    max_parallel_processes = int(os.getenv('MAX_NUMBER_OF_PROCESS', '16'))
 
     # Prepare commands for real samples
     for sample_path in real_samples_dir.iterdir():
