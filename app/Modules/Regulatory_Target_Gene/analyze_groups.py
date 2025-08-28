@@ -39,8 +39,9 @@ def _aggregate_results(directory: pathlib.Path) -> pl.DataFrame:
             lazy_df
             .rename({"P-adj": "P-value"})
             .with_columns(
-                ((pl.col("a") + 0.5) * (pl.col("d") + 0.5)) / ((pl.col("b") + 0.5) * (pl.col("c") + 0.5)).alias("Odds-Ratio")
+                Odds_Ratio=((pl.col("a") + 0.5) * (pl.col("d") + 0.5)) / ((pl.col("b") + 0.5) * (pl.col("c") + 0.5))
             )
+            .rename({"Odds_Ratio":"Odds-Ratio"})
             .select(["Trait", "Odds-Ratio", "P-value"])
         )
 
