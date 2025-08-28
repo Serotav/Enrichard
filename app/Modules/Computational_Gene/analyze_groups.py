@@ -15,15 +15,15 @@ def _aggregate_results(directory: pathlib.Path) -> pl.DataFrame:
     # Define the glob pattern to find all .tsv files in the directory.
     file_pattern = str(directory / '*.tsv')
 
-    # Define the expected schema to ensure consistency across all files.
-    # This helps Polars parse the data correctly and quickly.
     required_schema = {
         "Trait": pl.String,
         "a": pl.Int64,
         "b": pl.Int64,
         "c": pl.Int64,
         "d": pl.Int64,
-        "P-adj": pl.Float64
+        "P-adj": pl.Float64,
+        "P-Value": pl.Float64,
+        "Fold-Change": pl.Float64
     }
     
     try:
@@ -32,14 +32,14 @@ def _aggregate_results(directory: pathlib.Path) -> pl.DataFrame:
             separator='\t', 
             null_values="NA", 
             schema=required_schema,
-            infer_schema_length=0 # Do not infer schema, use the one provided
+            infer_schema_length=0 
         )
 
         processed_lazy_df = (
             lazy_df
             .rename({"P-adj": "P-value"})
             .with_columns(
-                Odds_Ratio=((pl.col("a") + 0.5) * (pl.col("d") + 0.5)) / ((pl.col("b") + 0.5) * (pl.col("c") + 0.5))
+                ((pl.col("a") + 0.5) * (pl.col("d") + 0.5)) / ((pl.col("b") + 0.5) * (pl.col("c") + 0.5)).alias("Odds-Ratio")
             )
             .select(["Trait", "Odds-Ratio", "P-value"])
         )
@@ -48,7 +48,7 @@ def _aggregate_results(directory: pathlib.Path) -> pl.DataFrame:
 
     except Exception as e:
         print(f"An error occurred during batch processing of files in {directory}: {e}")
-        return pl.DataFrame()
+        return pl.DataFrame()       
 
 def run_fisher_analysis(real_df: pl.DataFrame, control_df: pl.DataFrame, n_real_total: int, n_control_total: int, p_cutoff: float) -> list:
     """
