@@ -189,23 +189,20 @@ def main():
     real_results_df = _aggregate_results(real_dir)
     control_results_df = _aggregate_results(control_dir)
 
-    analysis_results = []
+    final_df = pl.DataFrame()
     if args.method == 'fisher':
-        # The fisher method can run even if one of the dataframes is empty
-        analysis_results = run_fisher_analysis(real_results_df, control_results_df, n_real_files, n_control_files, args.p_value_cutoff)
+        final_df = run_fisher_analysis(real_results_df, control_results_df, n_real_files, n_control_files, args.p_value_cutoff)
     elif args.method == 'ttest':
-        # The t-test method implicitly requires both dataframes to have some data to draw traits from
         if real_results_df.is_empty():
-            print(f"Warning: No valid result files found in the real samples directory: {real_dir}. Cannot perform T-test.")
+            print(f"Warning: No valid data found for real samples. Cannot perform T-test.")
             return
-        analysis_results = run_ttest_analysis(real_results_df, control_results_df, n_real_files, n_control_files,args.p_value_cutoff)
+        final_df = run_ttest_analysis(real_results_df, control_results_df, n_real_files, n_control_files, args.p_value_cutoff)
 
-    if not analysis_results:
-        print("Warning: No traits were eligible for statistical comparison. This can happen if no traits are enriched in any sample.")
+    if final_df.is_empty():
+        print("Warning: No traits passed the significance cutoff.")
         return
 
     # Save Final Results
-    final_df = pl.DataFrame(analysis_results).sort("P-value")
     output_path = output_dir / f"group_comparison_dumbbell_{args.method}.tsv"
     final_df.write_csv(output_path, separator='\t')
     print(f"Successfully wrote group comparison results to {output_path}")
