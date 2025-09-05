@@ -46,7 +46,6 @@ sudo pacman -S --needed git-lfs
 git lfs install
 ```
 
-```
 ### Clone the repository and ensure you pull the LFS files.
 ```bash
 git clone https://github.com/Serotav/Enrichard
