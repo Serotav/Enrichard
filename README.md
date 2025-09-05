@@ -39,7 +39,7 @@ To run Enrichard locally, you will need to have **Docker**, **Docker Compose**, 
 
 Some modules, use large pre-computed data files that are stored using Git Large File Storage (LFS). 
 ```bash
-# Install Git LFS (example for Debian/Ubuntu)
+# Install Git LFS
 sudo pacman -S --needed git-lfs
 
 # Install for your user account

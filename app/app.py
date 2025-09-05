@@ -102,9 +102,9 @@ def main():
 
     # This part of the logic runs if at least one sample is provided 
     # The condition will need to be updated when we add the comparison logic
-    if sample_source_1 or sample_source_multi: # For now, we only proceed if the first sample is there
+    if sample_source_1 or sample_source_multi: # We only proceed if the first sample is there
         
-        # Configure Analysis Parameters (This section remains mostly the same) 
+        # Configure Analysis Parameters
         st.header("Configure Analysis Parameters")
         col1, col2, col3 = st.columns(3)
         selected_background_name = None
@@ -129,7 +129,7 @@ def main():
             correction_options = sorted(list(multitest_methods_names.values()) + ['none'])
             default_index = correction_options.index('Bonferroni')
             selected_correction_method = st.selectbox("Multiple Testing Correction", options=correction_options, index=default_index)
-            # i cannot fucking belive it: using the above would work (in multipletests) for all test correction BUT NOT FOR "FDR Benjamini-Hochberg" FOR SOME FUCKING REASON
+            #  cannot fucking belive it: using the above would work (in multipletests) for all test correction BUT NOT FOR "FDR Benjamini-Hochberg" FOR SOME FUCKING REASON
             if selected_correction_method != "none":
                 inverted_dict = {value: key for key, value in multitest_methods_names.items()}
                 selected_correction_method = inverted_dict[selected_correction_method]

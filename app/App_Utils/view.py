@@ -14,8 +14,8 @@ def display_altair_heatmap(file_path: pathlib.Path):
     try:
         df = pl.read_csv(file_path, separator='\t')
         
-        # Altair requires data in long format, so we melt the dataframe
-        long_df = df.melt(
+        # Altair requires data in long format, so we unpivot the dataframe
+        long_df = df.unpivot(
             id_vars=df.columns[0], 
             variable_name="State", 
             value_name="Odds-Ratio"
@@ -25,7 +25,7 @@ def display_altair_heatmap(file_path: pathlib.Path):
         min_or = long_df["Odds-Ratio"].min()
         max_or = long_df["Odds-Ratio"].max()
 
-        # Create a robust diverging domain centered at 1.0
+        # Create a diverging domain centered at 1.0
         color_domain = [min_or, 1.0, max_or]
         if min_or == 1.0 and max_or == 1.0:
             color_domain = [0.9, 1.0, 1.1] # Handle edge case where all values are 1.0
@@ -350,7 +350,7 @@ def create_group_dumbbell_plot(df: pd.DataFrame) -> alt.Chart:
         st.info("The result data is empty; cannot generate a plot.")
         return None
 
-    # --- 1. Detect analysis method to set dynamic chart elements ---
+    # Detect analysis method to set dynamic chart elements 
     method = df['Statistic_Name'].iloc[0]
     if method == "T-statistic":
         x_axis_title_base = "Mean log(Odds-Ratio)"
@@ -365,11 +365,11 @@ def create_group_dumbbell_plot(df: pd.DataFrame) -> alt.Chart:
         statistic_tooltip_title = "Statistic"
         chart_title = "Group Enrichment Comparison"
 
-    # --- 2. Filter data and prepare for plotting ---
+    #  Filter data and prepare for plotting 
     df_to_plot = df.sort_values("P-value").head(20).copy()
     sort_order = df_to_plot['Trait'].tolist()
 
-    # --- 3. Create the dumbbell plot components ---
+    #  Create the dumbbell plot components 
     
     # The connecting line (the "bar") uses the original wide-format data
     line = alt.Chart(df_to_plot).mark_rule().encode(
@@ -411,7 +411,6 @@ def create_group_dumbbell_plot(df: pd.DataFrame) -> alt.Chart:
         ]
     )
 
-    # --- 4. Layer the charts and add final properties ---
     chart = (line + points).properties(
         title=chart_title
     ).interactive()
@@ -453,7 +452,7 @@ def display_multi_sample_results(multi_sample_results_dir: pathlib.Path):
                     st.info("No significant group-level traits were found for this module.")
                     continue
 
-                # --- ROUTER LOGIC: Choose plot based on filename ---
+                # Choose plot based on filename: this is really bad idea but will do for now
                 
                 # Case 1: Standard modules using dumbbell plot
                 if "_dumbbell_" in file_path.name:
@@ -500,7 +499,7 @@ def display_group_comparison_heatmap(df: pd.DataFrame) -> alt.Chart:
         st.info("The result data is empty; cannot generate a plot.")
         return None
 
-    # --- 1. Determine the dynamic range for the diverging color scale ---
+    # Determine the dynamic range for the diverging color scale 
     # We use the T-statistic: positive means Real > Control, negative means Control > Real.
     max_abs_t_stat = df['T-statistic'].abs().max()
     
@@ -511,7 +510,7 @@ def display_group_comparison_heatmap(df: pd.DataFrame) -> alt.Chart:
     if max_abs_t_stat == 0:
         color_domain = [-1, 0, 1]
 
-    # --- 2. Build the Altair Heatmap ---
+    # Build the Altair Heatmap 
     heatmap = alt.Chart(df).mark_rect().encode(
         x=alt.X('State:N', title="Chromatin State", sort=None), # Use 'sort=None' to respect original order if possible
         y=alt.Y('Cell_Type:N', title="Cell Type", sort=alt.Sort(field="P-value", op="min")), # Sort rows by most significant P-value
