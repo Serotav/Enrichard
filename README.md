@@ -1,18 +1,26 @@
-# Enrichard: CpG Site Enrichment Analysis Tool
+# Enrichard
 
-**Enrichard** is a powerful and user-friendly web application designed for CpG site enrichment analysis. It allows researchers to identify over-represented biological traits, pathways, or genomic features within a given set of CpG probe IDs. The tool is built with Python, Streamlit, and various data analysis libraries, providing a seamless and interactive experience for both single-sample and two-sample comparative analyses.
+**Enrichard**, also known as FLASH (Fast Loci Annotation of Significant enricHments), is a powerful and user-friendly web application designed for CpG site enrichment analysis. It allows researchers to identify over-represented biological traits, pathways, or genomic features within a given set of CpG probe IDs. The tool is built with Python, Streamlit, and a high-performance data processing backend, providing a seamless and interactive experience for complex epigenetic analyses.
 
-The project is built with a **modular architecture**, making it easy to extend and customize. New analysis modules can be added with minimal effort, and existing ones can be modified to suit specific research needs. To ensure maximum performance and efficiency, the data processing pipeline is optimized with **Polars**, a lightning-fast data manipulation library.
+The project is built with a **modular architecture**, making it easy to extend and customize. New analysis modules can be added with minimal effort. To ensure maximum performance and efficiency, the data processing pipeline is heavily optimized with **Polars**.
 
-## 🚀 Key Features
+## 🚀 Features
 
-- **Single Sample Enrichment:** Analyze a single list of CpG sites to find enriched biological terms.
-- **Two-Sample Comparison:** Compare two distinct sets of CpG sites to identify common and unique enriched traits between them.
-- **Custom Backgrounds:** Use predefined genomic backgrounds or upload your own custom background for more tailored analyses.
-- **Multiple Correction Methods:** Choose from a variety of statistical correction methods, including Bonferroni and FDR, to adjust p-values and reduce false positives.
-- **Interactive Visualizations:** Explore your results through interactive tables and visualizations, making it easy to interpret complex data.
-- **Parallel Processing:** Leverages parallel processing to deliver fast and efficient analysis, even with large datasets.
-- **Open-Source:** The entire project is open-source, encouraging transparency, collaboration, and community-driven improvements.
+- **Three Analisys Pipelines:**
+    
+    - **Single Sample Enrichment:** Analyze a single list of CpG sites to find enriched biological terms.
+        
+    - **Two-Sample Comparison:** Compare two distinct sets of CpG sites to identify common and unique enriched traits.
+        
+    - **Multi-Sample Group Comparison:** Perform a meta-analysis on entire cohorts to identify robust biological themes that are consistently enriched across many samples compared to random controls.
+
+- **High Performance:** The analysis core is designed for speed, leveraging parallel processing, pre-computation, and the Polars library to deliver results in minutes, not hours.
+    
+- **Custom Backgrounds:** Use predefined genomic backgrounds (HM450, EPIC, EPIC+, EPICv2) or upload your own.
+    
+- **Multiple Correction Methods:** Choose from a variety of statistical correction methods, including Bonferroni and FDR (Benjamini-Hochberg), to control for false positives.
+    
+- **Interactive Visualizations:** Explore your results through dynamic dot plots, heatmaps, and dumbbell plots, making it easy to interpret complex data.
 
 ## ⚙️ How It Works
 
@@ -27,22 +35,22 @@ For two-sample comparisons, the pipeline runs the enrichment analysis for both s
 
 ## 🛠️ Setup and Installation
 
-To run Enrichard locally, you will need to have Docker and Docker Compose installed.
+To run Enrichard locally, you will need to have **Docker**, **Docker Compose**, and **Git LFS** installed.
 
-1.  **Clone the repository:**
+Some modules, use large pre-computed data files that are stored using Git Large File Storage (LFS). 
+```bash
+# Install Git LFS (example for Debian/Ubuntu)
+sudo pacman -S --needed git-lfs
 
-    ```bash
-    git clone https://github.com/Serotav/Enrichard.git
-    cd Enrichard
-    ```
+# Install for your user account
+git lfs install
+```
 
-2.  **Build and run the Docker container:**
-
-    ```bash
-    docker-compose up --build
-    ```
-
-3.  **Access the application:**
-
-    Open your web browser and navigate to `http://localhost:8501` to start using Enrichard.
-
+```
+### Clone the repository and ensure you pull the LFS files.
+```bash
+git clone https://github.com/Serotav/Enrichard
+cd Enrichard
+git lfs pull
+docker compose up --build -d 
+```
