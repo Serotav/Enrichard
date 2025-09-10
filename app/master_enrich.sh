@@ -12,7 +12,7 @@ for module_dir in $MODULES_DIR/*/; do
     echo "Running enrich for $(basename "$module_dir")" >&2
     if [ -f "$module_dir/setup.sh" ]; then
         if [ "$RUN_MODE" = "server" ]; then
-            bash "$module_dir/enrich.sh" $USER_DIR $OUPUT_DIR $BACKGROUND_NAME $P_VALUE $CORRECTION &
+            time bash "$module_dir/enrich.sh" $USER_DIR $OUPUT_DIR $BACKGROUND_NAME $P_VALUE $CORRECTION &
         else
             bash "$module_dir/enrich.sh" $USER_DIR $OUPUT_DIR $BACKGROUND_NAME $P_VALUE $CORRECTION
         fi
