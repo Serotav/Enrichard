@@ -13,3 +13,4 @@ time python3 $SCRIPT_DIR/do_enrich.py \
     --correction "$CORRECTION" \
     --output_folder "$OUPUT_DIR" \
     --cache_folder "$SCRIPT_DIR/cached"
+echo $SCRIPT_DIR
