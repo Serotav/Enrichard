@@ -16,7 +16,11 @@ for module_dir in $MODULES_DIR/*/; do
 
     if [ -f "$module_dir/enrich.sh" ]; then
         if [ "$RUN_MODE" = "server" ]; then
-            { time bash "$module_dir/enrich.sh" $USER_DIR $OUPUT_DIR $BACKGROUND_NAME $P_VALUE $CORRECTION; } &
+            (
+                time bash "$module_dir/enrich.sh" $USER_DIR $OUPUT_DIR $BACKGROUND_NAME $P_VALUE $CORRECTION
+                echo "--- Finished module: $module_name ---"
+                echo 
+            ) >&2 &
         else
             time bash "$module_dir/enrich.sh" $USER_DIR $OUPUT_DIR $BACKGROUND_NAME $P_VALUE $CORRECTION
         fi
