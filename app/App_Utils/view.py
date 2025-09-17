@@ -209,7 +209,7 @@ def display_single_module_results(module_name: str, file_path: pathlib.Path) -> 
         st.error(f"Error reading or processing result file '{file_path.name} {file_path}': {e}")
         return False
     
-def display_single_sample_results(module_output:str)->None:
+def display_single_cpg_list_results(module_output:str)->None:
     """
     Scans for result files, creates tabs, and displays results and methodology.
     """
@@ -417,7 +417,7 @@ def create_group_dumbbell_plot(df: pd.DataFrame) -> alt.Chart:
 
     return chart
 
-def display_multi_sample_results(multi_sample_results_dir: pathlib.Path):
+def display_multi_cpg_lists_results(multi_sample_results_dir: pathlib.Path):
     """
     Scans for group comparison result files, creates tabs for each module,
     and displays the results using the appropriate chart based on the filename.

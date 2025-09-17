@@ -21,7 +21,7 @@ def main():
 
     analysis_type = st.radio(
         "Select Analysis Type",
-        ("Single Sample Enrichment", "Two Sample Comparison", "Multi-Sample Group Comparison"),
+        ("Single CpG list enrichment", "Two CpG lists Comparison", "Multi CpG lists Group Comparison"),
         horizontal=True,
         label_visibility="collapsed"
     )
@@ -32,8 +32,8 @@ def main():
     sample_source_multi = None
     
     # Section for Single Sample Analysis
-    if analysis_type == "Single Sample Enrichment":
-        st.header("Single Sample Input")
+    if analysis_type == "Single CpG list enrichment":
+        st.header("Single CpG list  Input")
         st.markdown("Upload a file containing CpG probe IDs (one ID per line) to perform enrichment analysis.")
         
         input_method = st.radio(
@@ -41,7 +41,7 @@ def main():
             ("Upload a File", "Use an Example"),
             horizontal=True,
             label_visibility="collapsed",
-            key="single_sample_input_method" # Use a key to avoid widget conflicts
+            key="single_sample_input_method" 
         )
 
         if input_method == "Upload a File":
@@ -66,8 +66,8 @@ def main():
                     sample_source_1 = example_files[selected_example_name]
 
     #  Section for Two Sample Comparison 
-    elif analysis_type == "Two Sample Comparison":
-        st.header("Two Sample Input")
+    elif analysis_type == "Two CpG lists Comparison":
+        st.header("Two CpG lists Comparison Input")
         st.markdown("Upload two files, each containing a list of CpG probe IDs. The analysis will identify common enriched traits.")
 
         col_a, col_b = st.columns(2)
@@ -89,7 +89,7 @@ def main():
 
             selected_background_name_B = st.selectbox("Choose background for Sample B", options=available_choices, key="bg_B")
 
-    elif analysis_type == "Multi-Sample Group Comparison":
+    elif analysis_type == "Multi CpG lists Group Comparison":
         st.header("Multi-Sample Group Input")
         st.markdown("Upload a `.zip` file containing multiple sample files (one ID per line in each file).")
         uploaded_zip_file = st.file_uploader(
@@ -111,7 +111,7 @@ def main():
         custom_background_file = None
         
         # Make the background selector conditional
-        if analysis_type == "Single Sample Enrichment" or analysis_type == "Multi-Sample Group Comparison":
+        if analysis_type == "Single CpG list enrichment" or analysis_type == "Multi-Sample Group Comparison":
             with col3:
                 st.subheader("Background Universe")
                 available_choices = get_background_options() + ['custom']
@@ -136,8 +136,8 @@ def main():
 
         # Run Button Logic, check both samples for comparison mode
         run_button_disabled = (
-            (analysis_type == "Single Sample Enrichment" and sample_source_1 is None) or
-            (analysis_type == "Two Sample Comparison" and (sample_source_1 is None or sample_source_2 is None)) or
+            (analysis_type == "Single CpG list enrichment" and sample_source_1 is None) or
+            (analysis_type == "Two CpG lists Comparison" and (sample_source_1 is None or sample_source_2 is None)) or
             (analysis_type == "Multi-Sample Group Comparison" and sample_source_multi is None) or
             (selected_background_name == 'custom' and custom_background_file is None)
         )
@@ -175,7 +175,7 @@ def main():
                     save_uploaded_file(custom_background_file, user_dir / USER_CUSTOM_BACKGROUND_NAME)
 
                 run_enrichment_pipeline(user_dir, output_dir, background, p_value_threshold, selected_correction_method)
-                display_single_sample_results(output_dir)
+                display_single_cpg_list_results(output_dir)
             
             elif analysis_type == "Two Sample Comparison":
                 user_sample_a_path = user_dir / TOW_SAMPLE_COMPARISON_NAME_1
@@ -187,7 +187,7 @@ def main():
                 save_uploaded_file(sample_source_1, user_sample_a_path/ USER_SAMPLE_NAME)
                 save_uploaded_file(sample_source_2, user_sample_b_path/ USER_SAMPLE_NAME)
                 
-                run_enrichment_pipeline_2samples(
+                run_enrichment_pipeline_2cpg_lists(
                     user_dir=user_dir,
                     background_A=selected_background_name_A, 
                     background_B=selected_background_name_B, 
@@ -230,7 +230,7 @@ def main():
                 create_control_samples(real_samples_dir, background_path, control_samples_dir)
 
                 # Run the parallel pipeline 
-                run_enrichment_pipeline_multi_sample(
+                run_enrichment_pipeline_multi_cpg_lists(
                     real_samples_dir=real_samples_dir,
                     control_samples_dir=control_samples_dir,
                     background=background,
@@ -252,7 +252,7 @@ def main():
                     method=group_comparison_method
                 )
                 
-                display_multi_sample_results(multi_sample_results_dir)
+                display_multi_cpg_lists_results(multi_sample_results_dir)
 
 
             
