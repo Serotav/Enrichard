@@ -16,7 +16,7 @@ def display_altair_heatmap(file_path: pathlib.Path):
         
         # Altair requires data in long format, so we unpivot the dataframe
         long_df = df.unpivot(
-            id_vars=df.columns[0], 
+            index=df.columns[0], 
             variable_name="State", 
             value_name="Odds-Ratio"
         ).rename({df.columns[0]: "Cell_Type"})
