@@ -8,9 +8,9 @@ The project is built with a **modular architecture**, making it easy to extend a
 
 - **Three Analisys Pipelines:**
     
-    - **Single Sample Enrichment:** Analyze a single list of CpG sites to find enriched biological terms.
+    - **Single CpG list enrichment:** Analyze a single list of CpG sites to find enriched biological terms.
         
-    - **Two-Sample Comparison:** Compare two distinct sets of CpG sites to identify common and unique enriched traits.
+    - **Two CpG lists Comparison:** Compare two distinct sets of CpG sites to identify common and unique enriched traits.
         
     - **Multi-Sample Group Comparison:** Perform a meta-analysis on entire cohorts to identify robust biological themes that are consistently enriched across many samples compared to random controls.
 
@@ -21,6 +21,20 @@ The project is built with a **modular architecture**, making it easy to extend a
 - **Multiple Correction Methods:** Choose from a variety of statistical correction methods, including Bonferroni and FDR (Benjamini-Hochberg), to control for false positives.
     
 - **Interactive Visualizations:** Explore your results through dynamic dot plots, heatmaps, and dumbbell plots, making it easy to interpret complex data.
+## 📸 Screenshots
+Here's a glimpse of the Enrichard interface and its interactive visualizations.
+
+Main Interface
+![Main Interface](img/interface.png)
+Dot Plot Visualization
+![Dot Plot](img/dotplot.png)
+
+Heatmap Visualization
+![Heat Map](img/heatmap.png)
+
+Dumbbell Plot for Comparisons
+![Dumbbell Plot](img/dumbbelplot.png)
+
 
 ## ⚙️ How It Works
 

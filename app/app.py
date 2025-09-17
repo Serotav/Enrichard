@@ -138,7 +138,7 @@ def main():
         run_button_disabled = (
             (analysis_type == "Single CpG list enrichment" and sample_source_1 is None) or
             (analysis_type == "Two CpG lists Comparison" and (sample_source_1 is None or sample_source_2 is None)) or
-            (analysis_type == "Multi-Sample Group Comparison" and sample_source_multi is None) or
+            (analysis_type == "Multi CpG lists Group Comparison" and sample_source_multi is None) or
             (selected_background_name == 'custom' and custom_background_file is None)
         )
 
@@ -200,7 +200,7 @@ def main():
                 comparison_results_dir = process_and_merge_comparison_results(user_dir)
                 display_comparison_results(comparison_results_dir)
             
-            elif analysis_type == "Multi-Sample Group Comparison":
+            elif analysis_type == "Multi CpG lists Group Comparison":
                 # Define directories for real, control, and results
                 real_samples_dir = user_dir / "real_samples"
                 control_samples_dir = user_dir / "control_samples"
