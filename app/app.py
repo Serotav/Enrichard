@@ -160,7 +160,7 @@ def main():
                 user_background_path = user_dir / USER_CUSTOM_BACKGROUND_NAME
                 save_uploaded_file(custom_background_file, user_background_path)
 
-            if analysis_type == "Single Sample Enrichment":
+            if analysis_type == "Single CpG list enrichment":
                 # Logic to handle both uploaded and example files for sample 1
                 if isinstance(sample_source_1, pathlib.Path): # It's an example
                     st.info(f"Using example file: {sample_source_1.name}")
@@ -177,7 +177,7 @@ def main():
                 run_enrichment_pipeline(user_dir, output_dir, background, p_value_threshold, selected_correction_method)
                 display_single_cpg_list_results(output_dir)
             
-            elif analysis_type == "Two Sample Comparison":
+            elif analysis_type == "Two CpG lists Comparison":
                 user_sample_a_path = user_dir / TOW_SAMPLE_COMPARISON_NAME_1
                 user_sample_b_path = user_dir / TOW_SAMPLE_COMPARISON_NAME_2
                 
