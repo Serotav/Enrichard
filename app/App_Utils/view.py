@@ -34,7 +34,7 @@ def display_altair_heatmap(file_path: pathlib.Path):
         state_order = df.columns[1:]
         cell_size, chart_height, chart_width= 15, 600, 800
         heatmap = alt.Chart(long_df).mark_rect(size=cell_size).encode( 
-            x=alt.X('State:N', sort=state_order, title="Chromatin State",axis=alt.Axis(orient='top', titleOrient='top')),
+            x=alt.X('State:N', sort=state_order, title="Chromatin State",axis=alt.Axis(orient='top')),
             y=alt.Y('Cell_Type:N', title="Cell Type", axis=alt.Axis(labelLimit=200)),
             color=alt.Color('Odds-Ratio:Q',
                 scale=alt.Scale(scheme='redblue', domain=color_domain, reverse=True),
@@ -512,7 +512,7 @@ def display_group_comparison_heatmap(df: pd.DataFrame) -> alt.Chart:
 
     # Build the Altair Heatmap 
     heatmap = alt.Chart(df).mark_rect().encode(
-        x=alt.X('State:N', title="Chromatin State", sort=None, axis=alt.Axis(orient='top', titleOrient='top')), # Use 'sort=None' to respect original order if possible
+        x=alt.X('State:N', title="Chromatin State", sort=None, axis=alt.Axis(orient='top')), # Use 'sort=None' to respect original order if possible
         y=alt.Y('Cell_Type:N', title="Cell Type", sort=alt.Sort(field="P-value", op="min")), # Sort rows by most significant P-value
         
         # Color is based on the T-statistic for direction and magnitude
