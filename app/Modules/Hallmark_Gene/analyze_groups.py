@@ -4,7 +4,7 @@ import argparse
 import pathlib
 import polars as pl
 import numpy as np
-from scipy.stats import ttest_ind, fisher_exact
+from scipy.stats import ttest_ind
 
 def _aggregate_results(directory: pathlib.Path) -> pl.DataFrame:
     """
